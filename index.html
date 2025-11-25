@@ -1,0 +1,1743 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>크로노스 나이트: 심판의 날</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Noto+Serif+KR:wght@600&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #050505;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Noto Serif KR', serif;
+        }
+
+        #game-container {
+            position: relative;
+            width: 1024px;
+            height: 576px;
+            box-shadow: 0 0 50px rgba(0, 255, 255, 0.1);
+            border: 1px solid #222;
+            background: #000;
+        }
+
+        canvas { display: block; width: 100%; height: 100%; }
+
+        /* UI 레이어 */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+        }
+
+        .hud {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .bar-wrap {
+            display: flex; flex-direction: column; gap: 5px;
+        }
+
+        .label {
+            font-family: 'Cinzel', serif;
+            font-size: 14px; color: #b58b3a; text-shadow: 0 1px 0 rgba(0,0,0,0.6);
+        }
+
+        .energy-bar {
+            width: 200px; height: 8px; background: #333;
+            border: 1px solid #555; transform: skewX(-20deg);
+        }
+        .energy-fill {
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg,#d6b370,#b58b3a);
+            box-shadow: 0 2px 8px rgba(181,139,58,0.45); transition: width 0.1s;
+        }
+
+        /* 보스 체력바 (숨김 상태로 시작) */
+        #boss-hud {
+            position: absolute; bottom: 30px; left: 50%;
+            transform: translateX(-50%);
+            width: 600px; display: none;
+            flex-direction: column; align-items: center;
+        }
+        #boss-name {
+            color: #7b2a2a; font-family: 'Cinzel', serif; font-size: 22px;
+            text-shadow: 0 2px 6px rgba(0,0,0,0.6); margin-bottom: 6px;
+        }
+        #boss-hp-bg {
+            width: 100%; height: 15px; background: #220000;
+            border: 2px solid #500;
+        }
+        #boss-hp-fill {
+            width: 100%; height: 100%; background: linear-gradient(90deg,#7b2a2a,#9b3a3a);
+            box-shadow: inset 0 0 8px rgba(0,0,0,0.4); transition: width 0.2s;
+        }
+
+        /* 컷씬/대화 */
+        #dialogue {
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+            width: 80%; max-width: 900px; display: none; pointer-events: none; z-index: 50;
+            font-family: 'Noto Serif KR', serif;
+        }
+        .dialogue-box {
+            display: flex; gap: 20px; align-items: center; justify-content: center;
+            background: linear-gradient(180deg, rgba(245,238,220,0.95), rgba(0, 0, 0, 0.92));
+            border-radius: 12px; padding: 18px; border: 2px solid rgba(120,80,40,0.18);
+            backdrop-filter: blur(6px) saturate(120%);
+            box-shadow: 0 6px 24px rgba(0,0,0,0.6), 0 0 24px rgba(0,255,255,0.02) inset;
+        }
+        .dialogue-portrait { width: 90px; height: 90px; border-radius: 12px; background: linear-gradient(180deg,#c9b58e,#d9c7a2); border: 2px solid rgba(100,60,30,0.12); display:flex; align-items:center; justify-content:center; font-weight:bold; color:#3b2a1b; text-align:center; padding:6px; box-shadow:0 4px 10px rgba(0,0,0,0.3); }
+        .dialogue-content { display:flex; flex-direction:column; gap:6px; min-width: 420px; }
+        .speaker { font-family: 'Cinzel', serif; color: #5a3727; font-size: 18px; font-weight: 700; letter-spacing:0.5px;}
+        .text { color: #eee; font-size: 20px; line-height:1.3; }
+        .hint { font-size: 12px; color: #6b4b34; margin-top: 10px; animation: blink 1s infinite; text-align:center;}
+
+        @keyframes blink { 50% { opacity: 0; } }
+        
+        /* 스캔라인 */
+        .scanline {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            /* subtle parchment texture like overlay */
+            background: linear-gradient(180deg, rgba(230,215,185,0.02), rgba(200,170,130,0.02));
+            background-size: 100% 10px; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="1024" height="576"></canvas>
+    <div class="scanline"></div>
+
+    <div id="ui-layer">
+        <div class="hud">
+            <div class="bar-wrap">
+                <span class="label">CHRONOS ENERGY</span>
+                <div class="energy-bar"><div class="energy-fill" id="energy-bar"></div></div>
+            </div>
+            <div class="label" style="font-size: 20px;">STAGE <span id="stage-num" style="color:white">1</span></div>
+        </div>
+
+        <div id="boss-hud">
+            <span id="boss-name">THE JUDGE</span>
+            <div id="boss-hp-bg"><div id="boss-hp-fill"></div></div>
+                <div id="boss-hp-text" style="color:#efe0c8; margin-top:6px; font-family:Cinzel, serif; font-size:14px; text-shadow:0 1px 3px rgba(0,0,0,0.6)"></div>
+        </div>
+
+        <div id="dialogue">
+            <div class="dialogue-box">
+                <div class="dialogue-portrait" id="portrait">ICON</div>
+                <div class="dialogue-content">
+                    <div class="speaker" id="speaker">HERO</div>
+                    <div class="text" id="d-text">...</div>
+                    <div class="hint">[SPACE] NEXT</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// UI Elements
+const uiEnergy = document.getElementById('energy-bar');
+const uiBossHud = document.getElementById('boss-hud');
+const uiBossHp = document.getElementById('boss-hp-fill');
+const uiBossHpText = document.getElementById('boss-hp-text');
+const uiDialogue = document.getElementById('dialogue');
+const uiSpeaker = document.getElementById('speaker');
+const uiText = document.getElementById('d-text');
+const uiPortrait = document.getElementById('portrait');
+const uiStage = document.getElementById('stage-num');
+
+// === 설정 및 상수 ===
+const GRAVITY = 0.5;
+const FRICTION = 0.85;
+const PLAYER_SPEED = 6.4; // increased ~2x as requested
+const JUMP_POWER = 14;
+const DASH_SPEED = 15; // reduced to 1/4 of previous dash distance/speed
+
+// Boss stats by id (default sizes/hp/colors)
+const BOSS_STATS = {
+    judge: { hp: 140, maxHp: 140, w: 120, h: 160, color: '#ff0044' },
+    archivist: { hp: 170, maxHp: 170, w: 100, h: 140, color: '#b28cff' },
+    paradox: { hp: 260, maxHp: 260, w: 160, h: 220, color: '#6b3b84' },
+    // stronger ascended variant of THE JUDGE for later encounter
+    judge_ascended: { hp: 320, maxHp: 320, w: 160, h: 200, color: '#b33a2a' }
+};
+
+// === 게임 상태 ===
+let gameState = 'MENU'; // MENU, PLAY, CUTSCENE, DEAD, END
+let levelIdx = 0;
+let timeScale = 1.0;
+let shake = 0;
+let flash = 0;
+let lastTime = 0;
+
+// 입력
+const keys = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, z: false, Shift: false, r: false, ' ': false };
+const keyPress = { z: false, r: false, ' ': false };
+
+// === 엔티티 클래스 ===
+class Entity {
+    constructor(x, y, w, h, type) {
+        this.x = x; this.y = y; this.w = w; this.h = h;
+        this.vx = 0; this.vy = 0;
+        this.type = type;
+        this.grounded = false;
+        this.alive = true;
+        this.facingRight = true;
+        this.color = '#fff';
+    }
+    
+    updatePhysics(dt, platforms) {
+        // 중력
+        this.vy += GRAVITY * dt;
+        
+        // 이동 적용
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+
+        // 지형 충돌
+        this.grounded = false;
+        platforms.forEach(p => {
+            if (this.x + 10 < p.x + p.w && this.x + this.w - 10 > p.x &&
+                this.y + this.h >= p.y && this.y + this.h <= p.y + p.h + 20 &&
+                this.vy >= 0) {
+                this.grounded = true;
+                this.vy = 0;
+                this.y = p.y - this.h;
+            }
+        });
+
+        // 화면 범위 제한 (왼/오쪽 넘지 않게)
+        if (this.x < 0) { this.x = 0; this.vx = 0; }
+        if (this.x + this.w > canvas.width) { this.x = canvas.width - this.w; this.vx = 0; }
+    }
+}
+
+// 플레이어
+const player = new Entity(100, 300, 30, 50, 'player');
+player.energy = 100;
+player.state = 'IDLE'; // IDLE, RUN, JUMP, DASH, ATTACK
+player.attackTimer = 0;
+player.trail = [];
+
+// 적 관리
+let enemies = [];
+let projectiles = [];
+let particles = [];
+let platforms = [];
+let goal = {};
+let boss = null;
+
+// === 스토리 데이터 (user-provided) ===
+const STORY = {
+    "stages": [
+        { "id": 1, "key": "castle_gate", "mapId": 0, "title": "왕성 성문", "isBossStage": false, "bossId": null,
+            "introDialogue": [ {"speaker":"기사","text":"여기가 왕성의 성문… 이 반복을 끝내려면, 우선 이 문부터 연다."}, {"speaker":"경비병","text":"침입자 발견! 왕국의 질서를 위해 제거한다!"}, {"speaker":"시스템","text":"[Z] 로 대시하여 적을 베고, 적의 붉은 공격을 피하십시오." } ],
+            "midDialogue": [],
+            "clearCondition":"reach_goal_after_all_enemies_dead",
+            "clearDialogue":[ {"speaker":"기사","text":"성문은 열렸다. 이번 반복은 다르게 끝난다."} ]
+        },
+        { "id": 2, "key": "mage_corridor", "mapId": 1, "title":"마법사 회랑", "isBossStage": false, "bossId": null,
+            "introDialogue":[ {"speaker":"기사","text":"이 회랑… 수없이 통과했던 기억이 어렴풋이 남아있다."}, {"speaker":"마법사","text":"역사는 반복된다. 네 저항은 그저 기록의 한 줄일 뿐."}, {"speaker":"시스템","text":"[Shift] 로 시간을 늦추고, 마법을 피하거나 틈을 노리십시오." } ],
+            "midDialogue": [], "clearCondition":"reach_goal_after_all_enemies_dead","clearDialogue":[{"speaker":"기사","text":"기록이 뭐라 쓰여 있든 상관없다. 나는 앞으로 간다."}]
+        },
+        { "id": 3, "key": "bloody_stairs", "mapId": 3, "title":"피의 계단", "isBossStage": false, "bossId": null,
+            "introDialogue":[ {"speaker":"기사","text":"여기서… 수십 번은 떨어져 죽었지."}, {"speaker":"성문 수비대","text":"심판자께서 명하셨다! 그 누구도 더 이상 위로 오르지 못한다!"} ],
+            "midDialogue": [], "clearCondition":"reach_goal_after_all_enemies_dead","clearDialogue":[{"speaker":"기사","text":"이번엔 떨어지지 않았다… 조금씩, 미래가 바뀌고 있다."}]
+        },
+        { "id": 4, "key":"chaos_square", "mapId":4, "title":"혼돈의 광장", "isBossStage": false, "bossId": null,
+            "introDialogue":[ {"speaker":"나라시민","text":"여기서 계속 싸웠어요… 죽고, 다시 살아나서 또 싸우고…"}, {"speaker":"기사","text":"이 반복을 끝내야, 모두가 앞으로 나아갈 수 있다."}, {"speaker":"시스템","text":"사방에서 몰려오는 적을 처치한 뒤, 목표 지점으로 이동하십시오." }],
+            "midDialogue":[], "clearCondition":"reach_goal_after_all_enemies_dead","clearDialogue":[{"speaker":"나라시민","text":"광장이… 조용해졌어요."},{"speaker":"기사","text":"조금만 더 버텨라. 심판자에게 도달하면, 모든 반복을 끊어내겠다."}]
+        },
+        { "id": 5, "key":"judgement_hall", "mapId":2, "title":"심판의 방", "isBossStage": true, "bossId":"judge",
+            "introDialogue":[ {"speaker":"심판자","text":"여기까지 오다니, 집요하군. 하지만 네 죄는 죽음으로만 씻을 수 있다."}, {"speaker":"기사","text":"내 죄를 판단할 권리는 너에게 없다. 네가 만든 이 감옥부터 부수겠다."} ],
+            "midDialogue":[ {"trigger":"boss_hp_50","speaker":"심판자","text":"수백 번의 미래에서 넌 여기서 무너졌다. 기록이 증명한다!"}, {"trigger":"boss_hp_50","speaker":"기사","text":"그 기록, 오늘 내가 바꾼다!"} ],
+            "clearCondition":"boss_defeated","clearDialogue":[{"speaker":"심판자","text":"역사를… 자유롭게 만들겠다고? 인간이 감당할 수 있을 것이라 믿나…"},{"speaker":"기사","text":"실패하더라도, 그 선택은 우리가 한다."}]
+        },
+        { "id": 6, "key":"infinite_prison", "mapId":5, "title":"무한의 감옥", "isBossStage": false, "bossId": null,
+            "introDialogue":[{"speaker":"기사","text":"여기… 분명히 죽었던 곳이다. 같은 장면이 머릿속에서 계속 반복돼."},{"speaker":"환영","text":"돌아가라. 넌 언제나 여기서 끝났다."}], "midDialogue":[], "clearCondition":"reach_goal_after_all_enemies_dead","clearDialogue":[{"speaker":"기사","text":"이번에는 지나왔다. 과거의 나는 여기에 묶여 있었겠지."}]
+        },
+        { "id": 7, "key":"ruined_library", "mapId":6, "title":"폐허가 된 도서관", "isBossStage": false, "bossId": null,
+            "introDialogue":[{"speaker":"기록의 잔향","text":"심판자는 실패한 미래들을 수없이 보았다. 그래서 반복을 선택했다."},{"speaker":"기사","text":"실패를 두려워해 멈춰버리는 게, 진짜 파멸이다."}], "midDialogue":[], "clearCondition":"reach_goal_after_all_enemies_dead","clearDialogue":[{"speaker":"기사","text":"확실해졌다. 이 반복은, 두려움에서 시작된 감옥이다."}]
+        },
+        { "id": 8, "key":"chronos_control", "mapId":7, "title":"크로노스 제어실", "isBossStage": true, "bossId":"archivist",
+            "introDialogue":[{"speaker":"기록관","text":"어서 오게, 반항적인 변이. 네 모든 실패를 기록한 자다."},{"speaker":"기사","text":"날 그저 데이터로 봤겠지. 하지만 지금 이 선택은, 기록되지 않은 길이다."},{"speaker":"기록관","text":"통계를 믿지 않는군. 좋다, 예외가 될 수 있는지 확인해 보자."}],
+            "midDialogue":[{"trigger":"boss_hp_70","speaker":"기록관","text":"수치상 넌 여기서 93퍼센트 확률로 쓰러진다."},{"trigger":"boss_hp_40","speaker":"기사","text":"확률? 내 의지는 숫자로 나눌 수 없다!" }],
+            "clearCondition":"boss_defeated","clearDialogue":[{"speaker":"기록관","text":"기록을… 덮어쓰는 자라니… 흥미로운 변수로군…"},{"speaker":"기사","text":"이제 더 이상, 과거의 실패에 묶이지 않겠다."}]
+        },
+        { "id": 9, "key":"engine_core", "mapId":8, "title":"엔진 중심부", "isBossStage": false, "bossId": null,
+            "introDialogue":[{"speaker":"기사","text":"중력이 뒤틀리고 있다… 시간도, 공간도 한계까지 찢겨지는군."},{"speaker":"시스템","text":"발판이 나타났다 사라집니다. 시간 감속을 이용해 안전한 타이밍을 노리십시오."}],
+            "midDialogue":[], "clearCondition":"reach_goal_after_all_enemies_dead","clearDialogue":[{"speaker":"기사","text":"곧, 이 모든 반복의 심장부에 닿는다."}]
+        },
+        { "id": 10, "key":"engine_heart", "mapId":9, "title":"크로노스 엔진 심장부", "isBossStage": true, "bossId":"paradox",
+            "introDialogue":[{"speaker":"패러독스","text":"어리석은 인간. 시간이 자유로워지면, 세상은 혼돈 속으로 추락한다."},{"speaker":"기사","text":"혼돈이 두려워 역사를 가둔 건 너다. 미래는 우리 손으로 선택한다."},{"speaker":"패러독스","text":"선택의 부담을 감당할 수 있다고 믿는가? 그 오만을 시험해보지."}],
+            "midDialogue":[{"trigger":"boss_hp_70","speaker":"패러독스","text":"넌 이미 수천 번 이곳에서 죽었다. 이것도 또 하나의 실패일 뿐."},{"trigger":"boss_hp_40","speaker":"기사","text":"그래, 수천 번 쓰러졌지. 하지만 수천 한 번째는 다를 수 있다!" }],
+            "clearCondition":"boss_defeated","clearDialogue":[{"speaker":"패러독스","text":"시간이… 구속에서 풀려난다… 혼돈 속에서, 진짜 선택이 이루어지겠지…"},{"speaker":"기사","text":"그래. 그게 살아간다는 거다."}]
+        }
+    ],
+    "bosses": [
+        { "id":"judge", "name":"THE JUDGE", "title":"끝없는 순환의 심판자", "role":"시간 반복 체제를 수호하는 왕국의 인공 수호자" },
+        { "id":"archivist", "name":"ARCHIVIST", "title":"시간 기록의 관리자", "role":"모든 반복의 결과를 저장하고, 통계로 미래를 예측하는 존재" },
+        { "id":"paradox", "name":"THE PARADOX", "title":"시간 그 자체의 의지", "role":"크로노스 엔진 심장부에서 깨어난, 시간의 집합 의식" }
+    ]
+};
+
+// convenience mapping for older code compatibility
+const LEVELS = STORY.stages.map(s => ({ mapId: s.mapId, dialogue: s.introDialogue }));
+
+let cutsceneIdx = 0;
+let currentStage = null;
+let currentDialogueList = [];
+let currentDialogueType = 'intro'; // 'intro' | 'mid' | 'clear'
+let midTriggersFired = {}; // track fired mid-dialogue triggers per stage
+let prevGameState = null;
+
+// === 게임 루프 ===
+function loop(timestamp) {
+    let dt = (timestamp - lastTime) / 16.66;
+    lastTime = timestamp;
+    if(dt > 3) dt = 1;
+
+    handleInput();
+
+    if (gameState === 'PLAY') updatePlay(dt);
+    else if (gameState === 'CUTSCENE') updateCutscene();
+    else if (gameState === 'DEAD') updateDead();
+
+    draw();
+    requestAnimationFrame(loop);
+}
+
+function handleInput() {
+    keyPress.z = keys.z && !keyPress.z_held; keyPress.z_held = keys.z;
+    keyPress.r = keys.r && !keyPress.r_held; keyPress.r_held = keys.r;
+    keyPress[' '] = keys[' '] && !keyPress.space_held; keyPress.space_held = keys[' '];
+}
+
+// === 레벨 로드 ===
+function loadLevel(idx) {
+    if (idx >= LEVELS.length) {
+        gameState = 'END';
+        return;
+    }
+    
+    // 초기화
+    player.x = 50; player.y = 400; player.vx = 0; player.vy = 0;
+    player.energy = 100;
+    player.alive = true;
+    player.state = 'IDLE';
+    
+    enemies = [];
+    projectiles = [];
+    particles = [];
+    boss = null;
+    uiBossHud.style.display = 'none';
+
+    // remember current stage/story data if available
+    currentStage = STORY.stages[idx] || null;
+
+    // 맵 생성
+    platforms = [{x: -200, y: 500, w: 2000, h: 100}]; // 바닥
+    
+    if (idx === 0) { // 튜토리얼 (근접)
+        platforms.push({x: 300, y: 400, w: 200, h: 20});
+        platforms.push({x: 600, y: 300, w: 200, h: 20});
+        spawnEnemy(500, 300, 'melee');
+        spawnEnemy(700, 400, 'melee');
+        goal = {x: 900, y: 440, w: 40, h: 60};
+    } else if (idx === 1) { // 마법사 등장
+        platforms.push({x: 200, y: 350, w: 150, h: 20});
+        platforms.push({x: 500, y: 250, w: 150, h: 20});
+        platforms.push({x: 800, y: 350, w: 150, h: 20});
+        spawnEnemy(300, 350, 'melee');
+        spawnEnemy(600, 250, 'mage');
+        spawnEnemy(850, 350, 'mage');
+        goal = {x: 950, y: 440, w: 40, h: 60};
+    } else if (idx === 2) { // 보스전 (심판자)
+        uiBossHud.style.display = 'flex';
+        const cfgJ = BOSS_STATS.judge || {hp:100,maxHp:100,w:100,h:140,color:'#ff0044'};
+        boss = { id: 'judge', x:700, y:300, w:cfgJ.w, h:cfgJ.h, vx:0, vy:0, hp:cfgJ.hp, maxHp:cfgJ.maxHp, phase:1, state:'IDLE', timer:0, dir:-1, color:cfgJ.color };
+        uiBossHp.style.width = '100%';
+        uiBossHpText.innerText = boss.hp + ' / ' + boss.maxHp;
+        goal = {x: 9999, y: 0, w: 0, h: 0}; // 목표 없음 (보스 처치 시 승리)
+    } else if (idx === 3) {
+        // 좁은 길 + 다수의 근접 적
+        platforms.push({x: 200, y: 420, w: 120, h: 20});
+        platforms.push({x: 360, y: 360, w: 120, h: 20});
+        platforms.push({x: 520, y: 300, w: 120, h: 20});
+        platforms.push({x: 700, y: 360, w: 120, h: 20});
+        spawnEnemy(250, 360, 'melee');
+        spawnEnemy(420, 300, 'melee');
+        spawnEnemy(650, 360, 'melee');
+        spawnEnemy(820, 440, 'melee');
+        goal = {x: 920, y: 440, w: 40, h: 60};
+    } else if (idx === 4) {
+        // 최종 스테이지: 근접 + 원거리 혼합
+        platforms.push({x: 150, y: 400, w: 160, h: 20});
+        platforms.push({x: 380, y: 320, w: 160, h: 20});
+        platforms.push({x: 620, y: 240, w: 160, h: 20});
+        platforms.push({x: 860, y: 360, w: 120, h: 20});
+        spawnEnemy(220, 360, 'melee');
+        spawnEnemy(420, 320, 'mage');
+        spawnEnemy(660, 240, 'mage');
+        spawnEnemy(900, 360, 'melee');
+        goal = {x: 980, y: 440, w: 40, h: 60};
+    } else if (idx === 5) {
+        platforms.push({x: 250, y: 380, w: 160, h: 20});
+        platforms.push({x: 470, y: 300, w: 140, h: 20});
+        platforms.push({x: 700, y: 360, w: 160, h: 20});
+        spawnEnemy(300, 340, 'shield');
+        spawnEnemy(520, 260, 'mage');
+        spawnEnemy(760, 320, 'melee');
+        goal = {x: 960, y: 440, w: 40, h: 60};
+    } else if (idx === 6) {
+        platforms.push({x: 120, y: 420, w: 130, h: 20});
+        platforms.push({x: 320, y: 350, w: 200, h: 20});
+        platforms.push({x: 640, y: 300, w: 200, h: 20});
+        platforms.push({x: 880, y: 360, w: 120, h: 20});
+        spawnEnemy(160, 360, 'shield');
+        spawnEnemy(400, 310, 'mage');
+        spawnEnemy(700, 260, 'shield');
+        goal = {x: 980, y: 440, w: 40, h: 60};
+    } else if (idx === 7) {
+        // second boss encounter — ascended Judge variant (stronger, flashy)
+        uiBossHud.style.display = 'flex';
+        const cfgJ2 = BOSS_STATS.judge_ascended || {hp:240,maxHp:240,w:160,h:200,color:'#b33a2a'};
+        boss = { id: 'judge_ascended', x:700, y:260, w:cfgJ2.w, h:cfgJ2.h, vx:0, vy:0, hp:cfgJ2.hp, maxHp:cfgJ2.maxHp, phase:1, state:'IDLE', timer:0, dir:-1, color:cfgJ2.color };
+        uiBossHp.style.width = '100%';
+        uiBossHpText.innerText = boss.hp + ' / ' + boss.maxHp;
+        goal = {x: 9999, y: 0, w: 0, h: 0};
+    } else if (idx === 8) {
+        // archivist boss
+        uiBossHud.style.display = 'flex';
+        const cfgA = BOSS_STATS.archivist || {hp:160,maxHp:160,w:100,h:140,color:'#b28cff'};
+        boss = { id: 'archivist', x:700, y:300, w:cfgA.w, h:cfgA.h, vx:0, vy:0, hp:cfgA.hp, maxHp:cfgA.maxHp, phase:1, state:'IDLE', timer:0, dir:-1, color:cfgA.color };
+        uiBossHp.style.width = '100%';
+        uiBossHpText.innerText = boss.hp + ' / ' + boss.maxHp;
+        goal = {x: 9999, y: 0, w: 0, h: 0};
+    } else if (idx === 8) {
+        platforms.push({x: 180, y: 400, w: 160, h: 20});
+        platforms.push({x: 420, y: 340, w: 160, h: 20});
+        platforms.push({x: 680, y: 260, w: 160, h: 20});
+        spawnEnemy(220, 360, 'melee');
+        spawnEnemy(460, 300, 'mage');
+        spawnEnemy(740, 220, 'mage');
+        goal = {x: 980, y: 440, w: 40, h: 60};
+    } else if (idx === 9) {
+        // paradox boss
+        uiBossHud.style.display = 'flex';
+        const cfgP = BOSS_STATS.paradox || {hp:220,maxHp:220,w:160,h:220,color:'#6b3b84'};
+        boss = { id: 'paradox', x:700, y:200, w:cfgP.w, h:cfgP.h, vx:0, vy:0, hp:cfgP.hp, maxHp:cfgP.maxHp, phase:1, state:'IDLE', timer:0, dir:-1, color:cfgP.color };
+        uiBossHp.style.width = '100%';
+        uiBossHpText.innerText = boss.hp + ' / ' + boss.maxHp;
+        goal = {x: 9999, y: 0, w: 0, h: 0};
+    }
+
+    // set stage intro dialogue and show cutscene
+    currentDialogueList = (currentStage && currentStage.introDialogue) ? currentStage.introDialogue : [];
+    currentDialogueType = 'intro';
+    midTriggersFired = {};
+
+    gameState = 'CUTSCENE';
+    cutsceneIdx = 0;
+    uiDialogue.style.display = 'block';
+    uiStage.innerText = idx + 1;
+    updateDialogue();
+}
+
+function spawnEnemy(x, y, type) {
+    enemies.push({
+        x: x, y: y, w: 40, h: 60,
+        vx: 0, vy: 0,
+        startX: x,
+        type: type, // 'melee', 'mage', 'shield'
+        state: 'PATROL',
+        timer: 0,
+        dir: -1,
+        // AI flags
+        alerted: false,
+        // ranges (melee/shield short, mage long)
+        attackRange: (type === 'melee' || type === 'shield') ? 80 : 360,
+        detectionRange: (type === 'melee' || type === 'shield') ? 260 : 420,
+        alive: true,
+        grounded: false
+    });
+}
+
+// === 업데이트 로직 ===
+
+function updateCutscene() {
+    if (keyPress[' ']) {
+        cutsceneIdx++;
+        if (cutsceneIdx >= currentDialogueList.length) {
+            // dialog list finished - handle per type
+            if (currentDialogueType === 'intro') {
+                gameState = 'PLAY';
+                uiDialogue.style.display = 'none';
+            } else if (currentDialogueType === 'mid') {
+                // resume whatever we were doing before
+                gameState = prevGameState || 'PLAY';
+            } else if (currentDialogueType === 'clear') {
+                // advance to next stage after clear dialogue
+                uiDialogue.style.display = 'none';
+                levelIdx++;
+                loadLevel(levelIdx);
+            }
+            currentDialogueList = [];
+            currentDialogueType = 'intro';
+        } else {
+            updateDialogue();
+        }
+    }
+}
+
+function updateDialogue() {
+    const d = currentDialogueList[cutsceneIdx];
+    if (!d) return;
+    uiText.innerText = d.text;
+
+    // hide player and enemy names in cutscenes as requested
+    const showSpeaker = !isPlayerOrEnemySpeaker(d.speaker);
+    if (showSpeaker) {
+        uiSpeaker.style.display = 'block';
+        uiSpeaker.innerText = d.speaker;
+        uiSpeaker.style.color = getSpeakerColor(d.speaker);
+        if (uiPortrait) {
+            uiPortrait.style.display = 'flex';
+            uiPortrait.innerText = d.speaker.split(' ').map(t => t[0]).join('').slice(0,3);
+            uiPortrait.style.background = `linear-gradient(135deg, ${getSpeakerColor(d.speaker)}, rgba(0,0,0,0.2))`;
+        }
+    } else {
+        uiSpeaker.style.display = 'none';
+        if (uiPortrait) uiPortrait.style.display = 'none';
+    }
+}
+
+function getSpeakerColor(name) {
+    if (!name) return '#fff';
+    const n = name.toLowerCase();
+    if (n.includes('기사')) return '#b58b3a';
+    if (n.includes('심판') || n.includes('judge') || n.includes('패러독스')) return '#ff0044';
+    if (n.includes('기록') || n.includes('기록관') || n.includes('archivist')) return '#b28cff';
+    if (n.includes('시스템') || n.includes('system')) return '#b99a6a';
+    if (n.includes('마법사') || n.includes('마법')) return '#a050ff';
+    return '#fff';
+}
+
+function isPlayerOrEnemySpeaker(name) {
+    if (!name) return false;
+    const s = name.toLowerCase();
+    const hideList = ['기사','경비','마법사','심판','패러독스','기록','수비','환영','시민','mage','guard','knight','judge','paradox','archivist'];
+    return hideList.some(k => s.includes(k));
+}
+
+function startDialogueSequence(list, type, pauseState) {
+    if (!list || list.length === 0) return;
+    prevGameState = pauseState || gameState;
+    currentDialogueList = list;
+    currentDialogueType = type || 'mid';
+    cutsceneIdx = 0;
+    uiDialogue.style.display = 'block';
+    updateDialogue();
+    gameState = 'CUTSCENE';
+}
+
+function checkAndFireMidTriggers() {
+    if (!currentStage || !currentStage.midDialogue || !boss) return;
+    // collect unique triggers ordered in stage
+    const triggers = [...new Set(currentStage.midDialogue.map(d => d.trigger))];
+    for (let trig of triggers) {
+        if (midTriggersFired[trig]) continue;
+        if (!trig) continue;
+        if (trig.startsWith('boss_hp_')) {
+            const pct = parseFloat(trig.split('_').pop());
+            if (!isNaN(pct)) {
+                const threshold = boss.maxHp * (pct/100);
+                if (boss.hp <= threshold) {
+                    // collect dialogues with this trigger
+                    const list = currentStage.midDialogue.filter(d => d.trigger === trig).map(d => ({speaker: d.speaker, text: d.text}));
+                    if (list.length) {
+                        midTriggersFired[trig] = true;
+                        startDialogueSequence(list, 'mid', 'PLAY');
+                        return;
+                    }
+                }
+            }
+        }
+    }
+}
+
+function updatePlay(dt) {
+    // 1. 시간 조작
+    let localDt = dt * timeScale;
+    if (keys.Shift && player.energy > 0) {
+        timeScale = 0.2;
+        player.energy -= 0.5 * dt;
+        // time slow particle effect
+        if (Math.random() > 0.8) {
+            particles.push({
+                x: player.x + player.w/2 + (Math.random()-0.5)*20,
+                y: player.y + player.h/2 + (Math.random()-0.5)*20,
+                vx: (Math.random()-0.5)*1, vy: -Math.random()*2,
+                life: 20, color: '#00ffff', size: 2, type: 'glow'
+            });
+        }
+    } else {
+        timeScale = 1.0;
+        if (player.energy < 100) player.energy += 0.2 * dt;
+    }
+    uiEnergy.style.width = player.energy + '%';
+
+    // 2. 플레이어 물리 및 조작
+    if (player.state !== 'DASH') {
+        if (keys.ArrowLeft) { player.vx -= PLAYER_SPEED * localDt; player.facingRight = false; }
+        if (keys.ArrowRight) { player.vx += PLAYER_SPEED * localDt; player.facingRight = true; }
+        player.vx *= FRICTION;
+    }
+
+    if (keys.ArrowUp && player.grounded) {
+        player.vy = -JUMP_POWER;
+        player.grounded = false;
+        createDust(player.x + player.w/2, player.y + player.h);
+        // jump burst effect
+        for (let i=0; i<8; i++) {
+            particles.push({
+                x: player.x + player.w/2, y: player.y + player.h,
+                vx: (Math.random()-0.5)*6, vy: Math.random()*3,
+                life: 15, color: '#888', size: 2, type: 'glow'
+            });
+        }
+    }
+    
+    // landing impact
+    if (player.grounded && Math.abs(player.vy) > 5) {
+        shake = Math.min(8, Math.abs(player.vy) * 0.5);
+        for (let i=0; i<5; i++) {
+            particles.push({
+                x: player.x + player.w/2 + (Math.random()-0.5)*20, y: player.y + player.h,
+                vx: (Math.random()-0.5)*4, vy: -Math.random()*2,
+                life: 12, color: '#666', size: 3, type: 'dust'
+            });
+        }
+    }
+
+    // 대시 공격
+    if (keyPress.z && player.state !== 'DASH' && player.state !== 'ATTACK') {
+        player.state = 'DASH';
+        player.attackTimer = 15;
+        player.vx = player.facingRight ? DASH_SPEED : -DASH_SPEED;
+        player.vy = 0;
+        shake = 5;
+        flash = 2;
+        createSlash(player.x, player.y, player.facingRight);
+        // chromatic dash trail
+        for (let i=0; i<8; i++) {
+            particles.push({
+                x: player.x + player.w/2, y: player.y + player.h/2,
+                vx: -player.vx * 0.3, vy: (Math.random()-0.5)*2,
+                life: 12 - i, color: ['#ffd700','#fff','#b58b3a'][i%3],
+                size: 3 - i*0.3, type: 'trail'
+            });
+        }
+    }
+
+    if (player.state === 'DASH') {
+        player.attackTimer -= 1 * localDt;
+        if (player.attackTimer <= 0) player.state = 'IDLE';
+    }
+
+    player.updatePhysics(localDt, platforms);
+    if (player.y > 600) killPlayer();
+
+    // 3. 적 AI 및 물리
+    enemies.forEach(e => {
+        if (!e.alive) return;
+        updateEnemyAI(e, localDt);
+        
+        // 물리 적용 (적도 중력 받음)
+        e.vy += GRAVITY * localDt;
+        e.x += e.vx * localDt;
+        e.y += e.vy * localDt;
+        
+        // 적 지형 충돌
+        e.grounded = false;
+        platforms.forEach(p => {
+            if (e.x + 10 < p.x + p.w && e.x + e.w - 10 > p.x &&
+                e.y + e.h >= p.y && e.y + e.h <= p.y + p.h + 20 &&
+                e.vy >= 0) {
+                e.grounded = true;
+                e.vy = 0;
+                e.y = p.y - e.h;
+            }
+        });
+
+        // 플레이어와 전투 판정
+        // A. 플레이어 대시 공격 -> 적 처치
+        if (player.state === 'DASH' && rectIntersect(player, e)) {
+            // shield block check for shielded enemy
+            if (e.type === 'shield') {
+                const attackFromFront = (e.dir > 0 && player.x > e.x) || (e.dir < 0 && player.x < e.x);
+                if (attackFromFront) {
+                    // blocked! bounce player back
+                    player.vx = -player.vx * 1.2;
+                    player.state = 'IDLE';
+                    shake = 8;
+                    // block spark effect
+                    for (let i=0; i<6; i++) {
+                        particles.push({
+                            x: e.x + e.w/2, y: e.y + e.h/2,
+                            vx: (Math.random()-0.5)*6, vy: -Math.random()*5,
+                            life: 15, color: '#ffaa00', size: 3, type: 'spark'
+                        });
+                    }
+                    return;
+                }
+            }
+            
+            e.alive = false;
+            shake = 10;
+            flash = 3;
+            createBlood(e.x + e.w/2, e.y + e.h/2);
+            // small burst effect
+            for (let i=0; i<8; i++) {
+                const ang = (i/8) * Math.PI * 2;
+                particles.push({
+                    x: e.x + e.w/2, y: e.y + e.h/2,
+                    vx: Math.cos(ang) * 3,
+                    vy: Math.sin(ang) * 3,
+                    life: 20,
+                    color: '#ff6666',
+                    size: 2, type: 'spark'
+                });
+            }
+            player.energy = Math.min(100, player.energy + 20);
+        }
+        // B. 적의 공격 -> 플레이어 사망
+        // 근접: 공격 모션 중일 때 닿으면 사망
+        else if ((e.type === 'melee' || e.type === 'shield') && e.state === 'ATTACK') {
+            let attackBox = {
+                x: e.dir > 0 ? e.x + e.w : e.x - 40,
+                y: e.y + 10, w: 40, h: 40
+            };
+            if (rectIntersect(player, attackBox) && player.state !== 'DASH') {
+                // attack impact effect
+                for (let i=0; i<8; i++) {
+                    particles.push({
+                        x: player.x + player.w/2, y: player.y + player.h/2,
+                        vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6,
+                        life: 15, color: '#ff3333', size: 2, type: 'spark'
+                    });
+                }
+                killPlayer();
+            }
+        }
+    });
+
+    // 4. 보스전 로직
+    if (boss) updateBoss(localDt);
+
+    // 5. 투사체(마법) 업데이트
+    projectiles.forEach((p, i) => {
+        p.x += p.vx * localDt;
+        p.y += p.vy * localDt;
+        
+        // 플레이어 피격 (대시 중에도 맞음)
+        if (rectIntersect(player, {x:p.x-5, y:p.y-5, w:10, h:10})) {
+            killPlayer();
+        }
+        // 화면 밖 제거
+        if (p.x < 0 || p.x > canvas.width || p.y > canvas.height) projectiles.splice(i, 1);
+    });
+
+    // 6. 목표 도달
+    // When reaching goal (non-boss) require all enemies to be dead and then show clear dialogue
+    if (!boss && rectIntersect(player, goal)) {
+        // only allow advancing if all enemies are cleared
+        const anyEnemiesAlive = enemies.some(e => e.alive);
+        if (!anyEnemiesAlive) {
+            // show clear dialogue instead of teleporting immediately
+            if (currentStage && currentStage.clearDialogue && currentStage.clearDialogue.length > 0) {
+                startDialogueSequence(currentStage.clearDialogue, 'clear', 'PLAY');
+            } else {
+                levelIdx++;
+                loadLevel(levelIdx);
+            }
+        } else {
+            // small feedback: rumble and a flash so player knows they can't advance yet
+            shake = 6;
+            flash = 2;
+        }
+    }
+
+    updateParticles(localDt);
+    if (shake > 0) shake *= 0.9;
+    if (flash > 0) flash--;
+}
+
+function updateEnemyAI(e, dt) {
+    let dist = player.x - e.x;
+    let distAbs = Math.abs(dist);
+    let facingPlayer = (e.dir > 0 && dist > 0) || (e.dir < 0 && dist < 0);
+
+    // 낙사 방지 (지형 끝 감지)
+    if (e.grounded && e.state === 'PATROL') {
+        let lookAhead = e.x + (e.dir > 0 ? e.w + 10 : -10);
+        let aboutToFall = true;
+        platforms.forEach(p => {
+            if (lookAhead > p.x && lookAhead < p.x + p.w) aboutToFall = false;
+        });
+        if (aboutToFall) e.dir *= -1;
+    }
+
+    if (e.type === 'melee' || e.type === 'shield') {
+        // If player in detection range and facing, become alerted and start chasing
+        if (!e.alerted && distAbs < e.detectionRange && facingPlayer) {
+            e.alerted = true;
+            e.state = 'CHASE';
+        }
+
+        if (e.state === 'PATROL' && !e.alerted) {
+            // Normal patrol
+            e.vx = 1.5 * e.dir;
+        } else if (e.state === 'CHASE') {
+            // Move toward player until in attackRange
+            e.dir = dist > 0 ? 1 : -1;
+            // chase faster than player (use PLAYER_SPEED so tuning follows player changes)
+            e.vx = e.dir * (PLAYER_SPEED * 1.25);
+            if (distAbs <= e.attackRange) {
+                e.state = 'PREPARE';
+                e.timer = 18; // short windup
+                e.vx = 0;
+            }
+        } else if (e.state === 'ALERT') {
+            // fallback for legacy behavior
+            e.timer -= 1 * dt;
+            if (e.timer <= 0) { e.state = 'PREPARE'; e.timer = 30; }
+        } else if (e.state === 'PREPARE') {
+            // attack windup
+            e.timer -= 1 * dt;
+            if (e.timer <= 0) {
+                e.state = 'ATTACK';
+                e.timer = 20;
+                e.vx = e.dir * (DASH_SPEED * 0.7);
+            }
+        } else if (e.state === 'ATTACK') {
+            e.vx *= 0.9;
+            e.timer -= 1 * dt;
+            if (e.timer <= 0) { e.state = 'COOLDOWN'; e.timer = 60; }
+        } else if (e.state === 'COOLDOWN') {
+            e.timer -= 1 * dt;
+            if (e.timer <= 0) {
+                // if alerted, resume chase; otherwise return to patrol
+                e.state = e.alerted ? 'CHASE' : 'PATROL';
+            }
+        }
+    } 
+    else if (e.type === 'mage') {
+        if (e.state === 'PATROL' && !e.alerted) {
+            // 마법사는 제자리에서 감시하거나 짧게 이동 until detected
+            e.vx = 0;
+            if (dist > 0) e.dir = 1; else e.dir = -1;
+            if (distAbs < e.detectionRange) {
+                e.alerted = true;
+            }
+        }
+        if (e.alerted && e.state === 'PATROL') {
+            // immediately try to get into attack range
+            if (distAbs > e.attackRange) {
+                e.state = 'CHASE';
+            } else {
+                e.state = 'CASTING'; e.timer = 60;
+            }
+        }
+        else if (e.state === 'CHASE') {
+            // mage approaches to get in range; use PLAYER_SPEED-based chase speed so it's faster than player
+            e.dir = dist > 0 ? 1 : -1;
+            e.vx = e.dir * (PLAYER_SPEED * 1.1);
+            if (distAbs <= e.attackRange) { e.state = 'CASTING'; e.timer = 60; e.vx = 0; }
+        } else if (e.state === 'CASTING') {
+            e.timer -= 1 * dt;
+            // charging effect
+            if (Math.random() > 0.7) {
+                particles.push({
+                    x: e.x + e.w/2 + (e.dir*15), y: e.y + 10,
+                    vx: (Math.random()-0.5)*2, vy: -Math.random()*2,
+                    life: 15, color: '#a020f0', size: 2, type: 'glow'
+                });
+            }
+            if (e.timer <= 0) {
+                // 발사 with flash
+                let angle = Math.atan2(player.y - e.y, player.x - e.x);
+                projectiles.push({
+                    x: e.x + e.w/2, y: e.y + 20,
+                    vx: Math.cos(angle) * 6, vy: Math.sin(angle) * 6,
+                    color: '#a020f0'
+                });
+                // cast burst
+                for (let i=0; i<4; i++) {
+                    particles.push({
+                        x: e.x + e.w/2 + (e.dir*15), y: e.y + 10,
+                        vx: Math.cos(angle + (Math.random()-0.5)*0.5) * 3,
+                        vy: Math.sin(angle + (Math.random()-0.5)*0.5) * 3,
+                        life: 10, color: '#d080ff', size: 2, type: 'spark'
+                    });
+                }
+                e.state = 'COOLDOWN'; e.timer = 120;
+            }
+        } else if (e.state === 'COOLDOWN') {
+            e.timer -= 1 * dt;
+            if (e.timer <= 0) {
+                if (e.alerted) e.state = 'CASTING';
+                else e.state = 'PATROL';
+            }
+        }
+    }
+}
+
+function updateBoss(dt) {
+    // 보스 물리
+    boss.vy += GRAVITY * dt;
+    boss.x += boss.vx * dt;
+    boss.y += boss.vy * dt;
+    
+    // 바닥 충돌
+    if (boss.y + boss.h > 500) {
+        boss.y = 500 - boss.h;
+        boss.vy = 0;
+    }
+
+    // 플레이어와 충돌 (대시 공격 시 데미지)
+    if (player.state === 'DASH' && rectIntersect(player, boss)) {
+        // 플레이어 튕겨나감
+        player.vx = -player.vx * 1.5;
+        player.x += player.vx; 
+        player.state = 'IDLE'; // 대시 캔슬
+        
+        boss.hp -= 5; // 보스 체력 감소
+        shake = 15;
+        flash = 4;
+        createBlood(boss.x + boss.w/2, boss.y + boss.h/2, '#ff0044');
+        // impact burst
+        for (let i=0; i<15; i++) {
+            const ang = Math.random() * Math.PI * 2;
+            particles.push({
+                x: player.x + player.w/2, y: player.y + player.h/2,
+                vx: Math.cos(ang) * (4 + Math.random()*3),
+                vy: Math.sin(ang) * (4 + Math.random()*3),
+                life: 20, color: ['#fff','#ffd700','#ffaa00'][i%3],
+                size: 2 + Math.random()*2, type: 'spark'
+            });
+        }
+        uiBossHp.style.width = (boss.hp / boss.maxHp * 100) + '%';
+        uiBossHpText.innerText = Math.max(0, boss.hp) + ' / ' + boss.maxHp;
+        // check mid-trigger dialogues (hp-based)
+        checkAndFireMidTriggers();
+
+        if (boss.hp <= 0) {
+            // 보스 사망 연출 - spectacular explosion
+            for(let i=0; i<50; i++) createBlood(boss.x + boss.w/2, boss.y + boss.h/2, '#ff0044');
+            // massive explosion effect
+            for (let i=0; i<60; i++) {
+                const ang = (i/60) * Math.PI * 2;
+                const speed = 5 + Math.random()*8;
+                particles.push({
+                    x: boss.x + boss.w/2, y: boss.y + boss.h/2,
+                    vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed,
+                    life: 40 + Math.random()*30,
+                    color: ['#ff0000','#ff4400','#ff8800','#ffaa00','#fff'][i%5],
+                    size: 3 + Math.random()*4, type: 'spark'
+                });
+            }
+            // shockwave rings
+            for (let r=0; r<3; r++) {
+                setTimeout(() => {
+                    for (let i=0; i<20; i++) {
+                        const ang = (i/20) * Math.PI * 2;
+                        particles.push({
+                            x: boss.x + boss.w/2, y: boss.y + boss.h/2,
+                            vx: Math.cos(ang) * 6, vy: Math.sin(ang) * 6,
+                            life: 25, color: '#fff', size: 2, type: 'glow'
+                        });
+                    }
+                }, r * 100);
+            }
+            // remove boss and show clear dialogue for current stage (if exists)
+            boss = null;
+            flash = 15;
+            shake = 25;
+            if (currentStage && currentStage.clearDialogue && currentStage.clearDialogue.length > 0) {
+                startDialogueSequence(currentStage.clearDialogue, 'clear', 'PLAY');
+            } else {
+                // fallback: advance to next stage
+                levelIdx++;
+                loadLevel(levelIdx);
+            }
+            return;
+        }
+    } else if (rectIntersect(player, boss)) {
+        // if player collides with boss while not dashing, only kill them when
+        // collision occurs on the boss's mid/lower body. If the player is above
+        // the boss (landed on top) treat it as standing on the boss (no death).
+        if (player.state !== 'DASH') {
+            const playerBottom = player.y + player.h;
+            const bossTop = boss.y;
+            // allow a small tolerance so landing on top won't kill the player
+            if (playerBottom <= bossTop + 12) {
+                // land on top safely: snap player to boss top and zero vertical velocity
+                player.vy = 0;
+                player.y = bossTop - player.h;
+                player.grounded = true;
+            } else {
+                killPlayer();
+            }
+        }
+    }
+
+    // 보스 AI 패턴
+    const isAscended = boss.id === 'judge_ascended';
+    const isArchivist = boss.id === 'archivist';
+    const isParadox = boss.id === 'paradox';
+    let dist = player.x - boss.x;
+    
+    if (boss.state === 'IDLE') {
+        boss.vx = 0;
+        boss.dir = dist > 0 ? 1 : -1;
+        boss.timer += dt;
+        let idleTime = 60;
+        if (isAscended) idleTime = 45;
+        else if (isArchivist) idleTime = 50;
+        else if (isParadox) idleTime = 40;
+        
+        if (boss.timer > idleTime) {
+            // 패턴 랜덤 선택
+            let rand = Math.random();
+            if (isAscended) {
+                if (rand < 0.35) boss.state = 'CHARGE_PREP';
+                else if (rand < 0.6) boss.state = 'JUMP_PREP';
+                else if (rand < 0.85) boss.state = 'MAGIC_PREP';
+                else boss.state = 'ARC_PREP';
+            } else if (isArchivist) {
+                if (rand < 0.3) boss.state = 'CHARGE_PREP';
+                else if (rand < 0.5) boss.state = 'LASER_PREP';
+                else if (rand < 0.75) boss.state = 'MAGIC_PREP';
+                else boss.state = 'CLONE_PREP';
+            } else if (isParadox) {
+                if (rand < 0.25) boss.state = 'CHARGE_PREP';
+                else if (rand < 0.45) boss.state = 'JUMP_PREP';
+                else if (rand < 0.7) boss.state = 'SPIRAL_PREP';
+                else boss.state = 'RIFT_PREP';
+            } else {
+                if (rand < 0.4) boss.state = 'CHARGE_PREP';
+                else if (rand < 0.7) boss.state = 'JUMP_PREP';
+                else boss.state = 'MAGIC_PREP';
+            }
+            boss.timer = 0;
+        }
+    }
+    // 패턴 1: 돌진
+    else if (boss.state === 'CHARGE_PREP') {
+        boss.timer += dt;
+        // ascended prepares faster and more violently
+        if (boss.timer > (isAscended ? 18 : 30)) {
+            boss.state = 'CHARGE'; boss.timer = 0; boss.vx = boss.dir * (isAscended ? 26 : 15);
+            if (isAscended) {
+                // spectacle: spawn sparks and larger flash
+                for (let i=0;i<6;i++) createSpark(boss.x + boss.w/2, boss.y + boss.h/2, ['#ff9933','#ff4d4d','#ffd27a'][i%3], 6, 6 + i);
+                flash = 6; shake = 20;
+            }
+        }
+    }
+    else if (boss.state === 'CHARGE') {
+        boss.timer += dt;
+        // extra trail while charging
+        if (isAscended) {
+            createSpark(boss.x + (boss.dir>0?boss.w:0), boss.y + boss.h/2, '#ffbb44', 1, 3);
+            // when charge finishes, slam into ground creating projectiles
+            if (boss.timer > 28) {
+                boss.state = 'IDLE'; boss.vx = 0; boss.timer = 0;
+                shake = 20; flash = 4;
+                for (let s=-1; s<=1; s+=0.5) projectiles.push({x: boss.x + boss.w/2, y: 500-20, vx: 6*s, vy: -3 - Math.random()*3, color: '#ff6b3b'});
+            }
+        } else {
+            if (boss.timer > 30) { boss.state = 'IDLE'; boss.vx = 0; boss.timer = 0; }
+        }
+    }
+    // 패턴 2: 점프 찍기
+    else if (boss.state === 'JUMP_PREP') {
+        boss.timer += dt;
+        if (boss.timer > (isAscended ? 14 : 20)) { boss.state = 'JUMP'; boss.vy = (isAscended? -26 : -20); boss.vx = boss.dir * (isAscended?8:5); }
+    }
+    else if (boss.state === 'JUMP') {
+        if (boss.y >= 500 - boss.h) { // 착지
+            boss.state = 'IDLE'; boss.vx = 0; boss.timer = 0;
+            shake = isAscended? 32 : 20; // stronger quake for ascended
+            // 충격파 생성
+            if (isAscended) {
+                for (let i=-1; i<=1; i+=0.5) projectiles.push({x: boss.x + boss.w/2, y: 500-20, vx: 8*i, vy: -1, color: '#ff8a33'});
+                for (let i=0;i<12;i++) createSpark(boss.x + boss.w/2 + Math.random()*80-40, 500-20, ['#ff6b3b','#ffd27a'][i%2], 4, 6);
+            } else {
+                projectiles.push({x: boss.x, y: 500-20, vx: -5, vy: 0, color: 'red'});
+                projectiles.push({x: boss.x+boss.w, y: 500-20, vx: 5, vy: 0, color: 'red'});
+            }
+        }
+    }
+    // 패턴 3: 마법 난사
+    else if (boss.state === 'MAGIC_PREP') {
+        boss.timer += dt;
+        if (boss.timer > (isAscended? 28 : 40)) {
+            boss.state = 'IDLE'; boss.timer = 0;
+            if (isAscended) {
+                // giant barrage — colorful and dramatic
+                const colors = ['#ff6b3b','#ffb86b','#ffd27a','#ff4d4d'];
+                for (let r=0; r<3; r++) {
+                    for(let i=0;i<8;i++) {
+                        const ang = (i/8) * Math.PI*2 + (r*0.2);
+                        projectiles.push({
+                            x: boss.x + boss.w/2 + Math.cos(ang)*10,
+                            y: boss.y + 20 + Math.sin(ang)*10,
+                            vx: Math.cos(ang) * (5 + Math.random()*6),
+                            vy: Math.sin(ang) * (5 + Math.random()*6) - 2,
+                            color: colors[(i+r) % colors.length]
+                        });
+                    }
+                }
+                // extra flash
+                flash = 8; shake = 14;
+            } else {
+                for(let i=0; i<5; i++) {
+                    projectiles.push({ x: boss.x + boss.w/2, y: boss.y + 20, vx: (Math.random()-0.5)*10, vy: -5 - Math.random()*5, color: 'red' });
+                }
+            }
+        }
+    }
+
+    // Archivist: Laser sweep
+    else if (boss.state === 'LASER_PREP') {
+        boss.timer += dt;
+        if (boss.timer > 30) {
+            boss.state = 'LASER'; boss.timer = 0;
+            boss.laserAngle = Math.atan2(player.y - boss.y, player.x - boss.x);
+            for (let i=0; i<8; i++) createSpark(boss.x + boss.w/2, boss.y + 30, '#b28cff', 4, 8);
+            flash = 5;
+        }
+    }
+    else if (boss.state === 'LASER') {
+        boss.timer += dt;
+        boss.laserAngle += 0.08 * dt;
+        if (Math.floor(boss.timer) % 3 === 0) {
+            projectiles.push({
+                x: boss.x + boss.w/2, y: boss.y + 30,
+                vx: Math.cos(boss.laserAngle) * 10, vy: Math.sin(boss.laserAngle) * 10,
+                color: '#b28cff'
+            });
+            createSpark(boss.x + boss.w/2, boss.y + 30, '#ddb8ff', 2, 4);
+        }
+        if (boss.timer > 40) { boss.state = 'IDLE'; boss.timer = 0; }
+    }
+    // Archivist: Clone illusion
+    else if (boss.state === 'CLONE_PREP') {
+        boss.timer += dt;
+        if (boss.timer > 25) {
+            boss.state = 'IDLE'; boss.timer = 0;
+            for (let i=0; i<20; i++) createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#b28cff', 3, 12);
+            const angles = [-Math.PI/3, 0, Math.PI/3];
+            angles.forEach(ang => {
+                for (let j=0; j<5; j++) {
+                    projectiles.push({
+                        x: boss.x + boss.w/2, y: boss.y + boss.h/2,
+                        vx: Math.cos(ang) * (6 + j), vy: Math.sin(ang) * (6 + j),
+                        color: j % 2 === 0 ? '#b28cff' : '#ddb8ff'
+                    });
+                }
+            });
+            flash = 6; shake = 12;
+        }
+    }
+
+    // Paradox: Spiral vortex
+    else if (boss.state === 'SPIRAL_PREP') {
+        boss.timer += dt;
+        if (boss.timer > 35) {
+            boss.state = 'SPIRAL'; boss.timer = 0;
+            boss.spiralPhase = 0;
+            for (let i=0; i<15; i++) createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#a060d0', 4, 10);
+            flash = 7;
+        }
+    }
+    else if (boss.state === 'SPIRAL') {
+        boss.timer += dt;
+        boss.spiralPhase = (boss.spiralPhase || 0) + 0.15 * dt;
+        if (Math.floor(boss.timer * 2) % 2 === 0) {
+            for (let i=0; i<3; i++) {
+                const ang = boss.spiralPhase + (i * Math.PI * 2 / 3);
+                const rad = 30 + boss.timer * 3;
+                projectiles.push({
+                    x: boss.x + boss.w/2 + Math.cos(ang) * rad,
+                    y: boss.y + boss.h/2 + Math.sin(ang) * rad,
+                    vx: Math.cos(ang) * 4, vy: Math.sin(ang) * 4,
+                    color: ['#6b3b84', '#a060d0', '#d080ff'][i]
+                });
+            }
+        }
+        if (boss.timer > 50) { boss.state = 'IDLE'; boss.timer = 0; shake = 10; }
+    }
+    // Paradox: Dimensional rift
+    else if (boss.state === 'RIFT_PREP') {
+        boss.timer += dt;
+        if (boss.timer > 30) {
+            boss.state = 'IDLE'; boss.timer = 0;
+            for (let i=0; i<30; i++) createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#d080ff', 5, 15);
+            const riftCount = 12;
+            for (let i=0; i<riftCount; i++) {
+                const ang = (i / riftCount) * Math.PI * 2;
+                for (let r=1; r<=3; r++) {
+                    projectiles.push({
+                        x: boss.x + boss.w/2, y: boss.y + boss.h/2,
+                        vx: Math.cos(ang + r*0.1) * (5 + r*2),
+                        vy: Math.sin(ang + r*0.1) * (5 + r*2),
+                        color: r === 1 ? '#6b3b84' : r === 2 ? '#a060d0' : '#d080ff'
+                    });
+                }
+            }
+            flash = 10; shake = 18;
+        }
+    }
+
+    // special arc sweep for ascended judge
+    else if (boss.state === 'ARC_PREP') {
+        boss.timer += dt;
+        if (boss.timer > 24) {
+            boss.state = 'ARC'; boss.timer = 0;
+            // spawn a spectacular rotating arc volley
+            for (let i=0;i<16;i++) {
+                const ang = (i/16) * Math.PI*2;
+                projectiles.push({ x: boss.x + boss.w/2, y: boss.y + boss.h/2, vx: Math.cos(ang)*6, vy: Math.sin(ang)*6, color: '#ff9966' });
+            }
+            // some visual particles
+            for (let i=0;i<30;i++) createSpark(boss.x + boss.w/2 + (Math.random()-0.5)*120, boss.y + boss.h/2 + (Math.random()-0.5)*40, '#ffd27a', 3, 8);
+            shake = 18; flash = 6;
+        }
+    } else if (boss.state === 'ARC') {
+        boss.timer += dt;
+        if (boss.timer > 20) { boss.state = 'IDLE'; boss.vx = 0; boss.timer = 0; }
+    }
+}
+
+function updateParticles(dt) {
+    for(let i=particles.length-1; i>=0; i--) {
+        let p = particles[i];
+        p.life -= dt;
+        if (p.type === 'slash') {
+            // 유지
+        } else {
+            p.x += p.vx * dt; p.y += p.vy * dt;
+            p.vy += 0.2 * dt;
+        }
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+}
+
+function killPlayer() {
+    if (gameState === 'DEAD') return;
+    gameState = 'DEAD';
+    shake = 30;
+    createBlood(player.x, player.y, '#8b0000');
+}
+
+function updateDead() {
+    if (keyPress.r) loadLevel(levelIdx);
+}
+
+// === 그리기 (Canvas Drawing) ===
+function draw() {
+    // 배경
+    ctx.fillStyle = '#050505';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    if (shake > 0) ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake);
+
+    if (gameState === 'MENU') {
+        ctx.fillStyle = '#b58b3a'; ctx.font = '60px Cinzel'; ctx.textAlign = 'center';
+        ctx.fillText("CHRONOS KNIGHT", canvas.width/2, 250);
+        ctx.fillStyle = '#fff'; ctx.font = '20px serif';
+        ctx.fillText("Press [SPACE] to Start", canvas.width/2, 320);
+        if (keyPress[' ']) loadLevel(0);
+        ctx.restore(); return;
+    }
+
+    // 플랫폼 (네온 스타일)
+    platforms.forEach(p => {
+        let grd = ctx.createLinearGradient(p.x, p.y, p.x, p.y + p.h);
+        grd.addColorStop(0, '#222'); grd.addColorStop(1, '#000');
+        ctx.fillStyle = grd;
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+        ctx.strokeStyle = '#444'; ctx.strokeRect(p.x, p.y, p.w, p.h);
+        // 윗면 하이라이트
+        ctx.fillStyle = '#caa14b'; ctx.fillRect(p.x, p.y, p.w, 2);
+    });
+
+    // 문(목표) 그리기
+    if (goal && goal.w > 0 && goal.x < canvas.width) {
+        const doorX = goal.x, doorY = goal.y, doorW = goal.w, doorH = goal.h;
+        const anyAlive = enemies.some(e => e.alive);
+
+        // 문 프레임
+        ctx.save();
+        ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
+        ctx.fillStyle = anyAlive ? '#222' : '#004444'; // 닫힘: 어둡게, 열림: 청록
+        ctx.fillRect(doorX, doorY, doorW, doorH);
+        ctx.strokeRect(doorX, doorY, doorW, doorH);
+
+        // 문 패널
+        ctx.fillStyle = anyAlive ? '#111' : '#caa14b';
+        ctx.fillRect(doorX + 6, doorY + 6, doorW/2 - 8, doorH - 12);
+        ctx.fillRect(doorX + doorW/2 + 2, doorY + 6, doorW/2 - 8, doorH - 12);
+
+        // 잠금 표시
+        ctx.fillStyle = anyAlive ? 'rgba(255,255,255,0.6)' : '#fff';
+        ctx.beginPath();
+        const lockX = doorX + doorW/2; const lockY = doorY + doorH/2;
+        if (anyAlive) {
+            // draw padlock to indicate locked
+            ctx.fillStyle = '#444';
+            ctx.fillRect(lockX - 8, lockY - 6, 16, 16);
+            ctx.strokeStyle = '#222'; ctx.strokeRect(lockX - 8, lockY - 6, 16, 16);
+            ctx.strokeStyle = '#666'; ctx.beginPath(); ctx.arc(lockX, lockY - 6, 6, Math.PI, 0); ctx.stroke();
+            ctx.fillStyle = '#efe0c8'; ctx.font = '12px Cinzel'; ctx.textAlign = 'center'; ctx.fillText('LOCKED', lockX, doorY + doorH + 14);
+        } else {
+            // open door glow
+            ctx.fillStyle = 'rgba(0,255,220,0.08)'; ctx.fillRect(doorX-6, doorY-6, doorW+12, doorH+12);
+            ctx.fillStyle = '#efe0c8'; ctx.font = '12px Cinzel'; ctx.textAlign = 'center'; ctx.fillText('OPEN', lockX, doorY + doorH + 14);
+        }
+        ctx.restore();
+    }
+
+    // 적 그리기
+    enemies.forEach(e => {
+        if (!e.alive) return;
+        drawEnemy(e);
+    });
+
+    // 보스 그리기
+    if (boss) drawBoss(boss);
+
+    // 투사체
+    projectiles.forEach(p => {
+        // glowing core
+        ctx.fillStyle = p.color;
+        ctx.shadowBlur = 15; ctx.shadowColor = p.color;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI*2); ctx.fill();
+        // outer glow ring
+        ctx.shadowBlur = 25;
+        ctx.globalAlpha = 0.4;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, Math.PI*2); ctx.fill();
+        ctx.globalAlpha = 1.0;
+        ctx.shadowBlur = 0;
+        // trailing particles
+        if (Math.random() > 0.7) {
+            particles.push({
+                x: p.x + (Math.random()-0.5)*4, y: p.y + (Math.random()-0.5)*4,
+                vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2,
+                life: 8, color: p.color, size: 2, type: 'glow'
+            });
+        }
+    });
+
+    // 플레이어
+    if (gameState !== 'DEAD') drawPlayer();
+
+    // 파티클
+    particles.forEach(p => {
+        if (p.type === 'slash') {
+            const alpha = Math.min(1, p.life / 10);
+            if (p.layer === 0) {
+                // main slash - bright white core
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.strokeStyle = 'white'; ctx.lineWidth = 4;
+                ctx.shadowBlur = 15; ctx.shadowColor = 'rgba(255,255,255,0.9)';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y+25, 40, p.dir>0?-0.5:2.5, p.dir>0?1.0:4.0);
+                ctx.stroke();
+                ctx.restore();
+            } else {
+                // glow layer - golden aura
+                ctx.save();
+                ctx.globalAlpha = alpha * 0.6;
+                ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 8;
+                ctx.shadowBlur = 20; ctx.shadowColor = 'rgba(181,139,58,0.8)';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y+25, 42, p.dir>0?-0.5:2.5, p.dir>0?1.0:4.0);
+                ctx.stroke();
+                ctx.restore();
+            }
+            ctx.shadowBlur = 0;
+        } else if (p.type === 'trail' || p.type === 'spark' || p.type === 'glow') {
+            // glowing particles with fade
+            ctx.save();
+            const alpha = Math.min(1, p.life / 20);
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = p.color;
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+            ctx.fill();
+            ctx.restore();
+        } else {
+            ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.size, p.size);
+        }
+    });
+
+    // 화면 효과
+    if (flash > 0) {
+        ctx.fillStyle = `rgba(255,255,255,${flash*0.1})`;
+        ctx.fillRect(0,0,canvas.width, canvas.height);
+    }
+    
+    // time manipulation distortion overlay
+    if (timeScale < 1.0) {
+        ctx.save();
+        ctx.globalAlpha = 0.15;
+        ctx.strokeStyle = '#00ffff';
+        ctx.lineWidth = 1;
+        for (let i=0; i<canvas.height; i+=20) {
+            ctx.beginPath();
+            ctx.moveTo(0, i);
+            ctx.lineTo(canvas.width, i + Math.sin(Date.now()/100 + i)*5);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    // 사망 텍스트
+    if (gameState === 'DEAD') {
+        ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0,0,canvas.width, canvas.height);
+        ctx.fillStyle = '#7b2a2a'; ctx.font = '50px Cinzel'; ctx.textAlign = 'center';
+        ctx.fillText("TERMINATED", canvas.width/2, canvas.height/2);
+        ctx.fillStyle = 'white'; ctx.font = '20px serif';
+        ctx.fillText("[R] Rewind Time", canvas.width/2, canvas.height/2 + 50);
+    }
+    
+    // 엔딩
+    if (gameState === 'END') {
+        ctx.fillStyle = '#000'; ctx.fillRect(0,0,canvas.width, canvas.height);
+        ctx.fillStyle = '#b58b3a'; ctx.font = '40px Cinzel'; ctx.textAlign = 'center';
+        ctx.fillText("MISSION COMPLETE", canvas.width/2, 250);
+    }
+
+    ctx.restore();
+}
+
+function drawPlayer() {
+    let x = player.x, y = player.y, w = player.w, h = player.h;
+    
+    // 잔상 with chromatic effect
+    if (player.state === 'DASH') {
+        for (let i=0; i<3; i++) {
+            ctx.globalAlpha = 0.3 - i*0.1;
+            const colors = ['rgba(255,215,0,0.3)','rgba(255,255,255,0.25)','rgba(181,139,58,0.2)'];
+            ctx.fillStyle = colors[i];
+            ctx.fillRect(x - player.vx*(2+i*0.5), y, w, h);
+        }
+        ctx.globalAlpha = 1.0;
+    }
+    
+    // energy aura
+    if (player.energy > 70) {
+        ctx.save();
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = '#b58b3a';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#ffd700';
+        ctx.fillRect(x-2, y-2, w+4, h+4);
+        ctx.restore();
+    }
+
+    // 망토 (베지어 곡선)
+    ctx.fillStyle = '#111';
+    let capeX = player.facingRight ? x : x + w;
+    let sway = Math.sin(Date.now() / 200) * 5;
+    ctx.beginPath();
+    ctx.moveTo(x + w/2, y + 10);
+    ctx.quadraticCurveTo(x + w/2 - (player.facingRight?20:-20), y + 30, capeX - (player.facingRight?30:-30) + sway, y + 50);
+    ctx.lineTo(x + w/2, y + 40);
+    ctx.fill();
+
+    // 몸통 (그라데이션)
+    let grd = ctx.createLinearGradient(x, y, x, y+h);
+    grd.addColorStop(0, '#caa14b'); grd.addColorStop(1, '#6b3b2b');
+    ctx.fillStyle = grd;
+    ctx.fillRect(x, y, w, h);
+
+    // 눈
+    ctx.fillStyle = 'white';
+    ctx.shadowBlur = 5; ctx.shadowColor = 'white';
+    ctx.fillRect(player.facingRight ? x + w - 8 : x, y + 10, 8, 4);
+    ctx.shadowBlur = 0;
+}
+
+function drawEnemy(e) {
+    let color = '#555';
+    if (e.state === 'PREPARE') color = '#ff5500';
+    if (e.state === 'ATTACK') color = '#ff0000';
+    if (e.type === 'mage') color = '#800080';
+    if (e.type === 'shield') color = '#446688';
+
+    // 그림자
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath(); ctx.ellipse(e.x+e.w/2, e.y+e.h, 15, 5, 0, 0, Math.PI*2); ctx.fill();
+
+    if (e.type === 'melee') {
+        // 갑옷 기사
+        ctx.fillStyle = color;
+        ctx.fillRect(e.x, e.y, e.w, e.h);
+        // 투구 슬릿
+        ctx.fillStyle = 'black';
+        ctx.fillRect(e.x+10, e.y+10, e.w-20, 5);
+        // 눈 (붉은색)
+        ctx.fillStyle = 'red';
+        let eyeX = e.dir > 0 ? e.x + e.w - 10 : e.x + 2;
+        ctx.fillRect(eyeX, e.y + 11, 6, 3);
+        
+        // 창
+        ctx.strokeStyle = '#ccc'; ctx.lineWidth = 3;
+        ctx.beginPath();
+        let spearLen = e.state === 'ATTACK' ? 70 : 40;
+        let sx = e.dir > 0 ? e.x + e.w : e.x;
+        ctx.moveTo(e.x + e.w/2, e.y + 35);
+        ctx.lineTo(sx + (e.dir * spearLen), e.y + 35);
+        ctx.stroke();
+    } else if (e.type === 'shield') {
+        // 방패병 - 갑옷
+        ctx.fillStyle = color;
+        ctx.fillRect(e.x, e.y, e.w, e.h);
+        // 투구
+        ctx.fillStyle = 'black';
+        ctx.fillRect(e.x+10, e.y+10, e.w-20, 5);
+        // 눈
+        ctx.fillStyle = '#88ccff';
+        let eyeX = e.dir > 0 ? e.x + e.w - 10 : e.x + 2;
+        ctx.fillRect(eyeX, e.y + 11, 6, 3);
+        
+        // 방패 (앞쪽에 표시)
+        let shieldX = e.dir > 0 ? e.x + e.w - 5 : e.x - 15;
+        ctx.fillStyle = '#8899aa';
+        ctx.fillRect(shieldX, e.y + 15, 20, 35);
+        // 방패 테두리
+        ctx.strokeStyle = '#556677'; ctx.lineWidth = 2;
+        ctx.strokeRect(shieldX, e.y + 15, 20, 35);
+        // 방패 중앙 엠블럼
+        ctx.fillStyle = '#667788';
+        ctx.beginPath();
+        ctx.arc(shieldX + 10, e.y + 32, 6, 0, Math.PI*2);
+        ctx.fill();
+        
+        // 방패 글로우 (막을 때)
+        if (e.state === 'PREPARE' || e.state === 'ATTACK') {
+            ctx.save();
+            ctx.globalAlpha = 0.5;
+            ctx.strokeStyle = '#88ddff';
+            ctx.lineWidth = 3;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#88ddff';
+            ctx.strokeRect(shieldX - 2, e.y + 13, 24, 39);
+            ctx.restore();
+        }
+    } else if (e.type === 'mage') {
+        // 로브 (삼각형)
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(e.x + e.w/2, e.y);
+        ctx.lineTo(e.x + e.w, e.y + e.h);
+        ctx.lineTo(e.x, e.y + e.h);
+        ctx.fill();
+        // 지팡이
+        ctx.strokeStyle = '#a050ff';
+        ctx.beginPath();
+        ctx.moveTo(e.x + e.w/2 + (e.dir*15), e.y + 10);
+        ctx.lineTo(e.x + e.w/2 + (e.dir*15), e.y + 50);
+        ctx.stroke();
+        // 캐스팅 중일 때 빛남
+        if (e.state === 'CASTING') {
+            const pulse = 5 + Math.sin(Date.now()/50) * 2;
+            ctx.save();
+            ctx.fillStyle = '#fff';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#a020f0';
+            ctx.beginPath(); ctx.arc(e.x + e.w/2 + (e.dir*15), e.y + 10, pulse, 0, Math.PI*2); ctx.fill();
+            // outer glow ring
+            ctx.globalAlpha = 0.4;
+            ctx.fillStyle = '#d080ff';
+            ctx.beginPath(); ctx.arc(e.x + e.w/2 + (e.dir*15), e.y + 10, pulse + 4, 0, Math.PI*2); ctx.fill();
+            ctx.restore();
+        }
+    }
+    
+    // [ ! ] 표시
+    if (e.state === 'ALERT' || e.state === 'PREPARE') {
+        ctx.fillStyle = 'red'; ctx.font = 'bold 20px Arial'; ctx.textAlign = 'center';
+        ctx.fillText('!', e.x + e.w/2, e.y - 10);
+    }
+}
+
+function drawBoss(b) {
+    // draw boss base using its configured color (fall back to deep maroon)
+    ctx.fillStyle = b.color || '#300';
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+
+    // armor detail outline
+    ctx.strokeStyle = '#200'; ctx.lineWidth = 2;
+    ctx.strokeRect(b.x, b.y, b.w, b.h);
+
+    // boss-specific eye colors and effects
+    let eyeColor = 'red';
+    let eyeBlur = 20;
+    if (b.id === 'judge_ascended') { eyeColor = '#ffd27a'; eyeBlur = 36; }
+    else if (b.id === 'archivist') { eyeColor = '#b28cff'; eyeBlur = 28; }
+    else if (b.id === 'paradox') { eyeColor = '#d080ff'; eyeBlur = 32; }
+    
+    ctx.fillStyle = eyeColor;
+    ctx.shadowBlur = eyeBlur; ctx.shadowColor = eyeColor;
+    let eyeX = b.dir > 0 ? b.x + b.w - 30 : b.x + 10;
+    ctx.fillRect(eyeX, b.y + 20, 20, 10);
+    ctx.shadowBlur = 0;
+
+    // preparation aura / sigils
+    if (b.state.includes('PREP')) {
+        if (b.id === 'judge_ascended') {
+            ctx.strokeStyle = 'rgba(255,180,120,0.9)'; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.arc(b.x + b.w/2, b.y + b.h/2, 80 + Math.sin(Date.now()/30)*18, 0, Math.PI*2); ctx.stroke();
+            ctx.strokeStyle = 'rgba(255,110,60,0.6)'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(b.x + b.w/2, b.y + b.h/2, 50 + Math.sin(Date.now()/20)*10, 0, Math.PI*2); ctx.stroke();
+        } else if (b.id === 'archivist') {
+            // data stream effect
+            ctx.strokeStyle = 'rgba(178,140,255,0.8)'; ctx.lineWidth = 3;
+            for (let i=0; i<3; i++) {
+                ctx.beginPath();
+                ctx.arc(b.x + b.w/2, b.y + b.h/2, 40 + i*20 + (Date.now()/40 % 60), 0, Math.PI*2);
+                ctx.stroke();
+            }
+            // floating data particles
+            ctx.fillStyle = '#ddb8ff';
+            for (let i=0; i<6; i++) {
+                const ang = (Date.now()/500 + i) % (Math.PI*2);
+                ctx.fillRect(b.x + b.w/2 + Math.cos(ang)*50, b.y + b.h/2 + Math.sin(ang)*50, 4, 4);
+            }
+        } else if (b.id === 'paradox') {
+            // reality distortion
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            for (let i=0; i<4; i++) {
+                ctx.strokeStyle = `rgba(${107 + i*30},${59 + i*40},${132 + i*30},${0.6 - i*0.1})`;
+                ctx.lineWidth = 4 - i;
+                const offset = Math.sin(Date.now()/100 + i) * 15;
+                ctx.beginPath();
+                ctx.arc(b.x + b.w/2 + offset, b.y + b.h/2, 70 - i*10, 0, Math.PI*2);
+                ctx.stroke();
+            }
+            ctx.restore();
+        } else {
+            ctx.strokeStyle = 'yellow'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(b.x + b.w/2, b.y + b.h/2, 60 + Math.sin(Date.now()/50)*10, 0, Math.PI*2);
+            ctx.stroke();
+        }
+    }
+
+    // boss ambient aura effects
+    if (b.id === 'judge_ascended') {
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 3; i++) {
+            ctx.strokeStyle = `rgba(255,${120 - i*30},${80 - i*10},${0.12 + i*0.06})`;
+            ctx.lineWidth = 2 + i;
+            ctx.beginPath(); ctx.arc(b.x + b.w/2, b.y + b.h/2, 60 + i*24 + Math.sin(Date.now()/60 + i)*6, 0, Math.PI*2); ctx.stroke();
+        }
+        ctx.restore();
+    } else if (b.id === 'archivist') {
+        // digital grid aura
+        ctx.save(); ctx.globalAlpha = 0.15;
+        ctx.strokeStyle = '#b28cff'; ctx.lineWidth = 1;
+        for (let i=0; i<5; i++) {
+            ctx.beginPath();
+            ctx.moveTo(b.x + i*25, b.y);
+            ctx.lineTo(b.x + i*25, b.y + b.h);
+            ctx.stroke();
+        }
+        ctx.restore();
+    } else if (b.id === 'paradox') {
+        // time distortion waves
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 4; i++) {
+            const phase = (Date.now()/800 + i*0.25) % 1;
+            ctx.strokeStyle = `rgba(${107 + i*20},${59 + i*30},${132 + i*20},${0.2 * (1-phase)})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(b.x + b.w/2, b.y + b.h/2, 50 + phase*80, 0, Math.PI*2);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+}
+
+// === 유틸리티 ===
+function rectIntersect(r1, r2) {
+    return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x &&
+           r1.y < r2.y + r2.h && r1.y + r1.h > r2.y;
+}
+
+function createBlood(x, y, col='#ff0000') {
+    for(let i=0; i<10; i++) particles.push({
+        x:x, y:y, vx:(Math.random()-0.5)*10, vy:(Math.random()-0.5)*10,
+        life:40, color:col, size:Math.random()*4+2, type:'rect'
+    });
+}
+function createDust(x, y) {
+    for(let i=0; i<5; i++) particles.push({
+        x:x, y:y, vx:(Math.random()-0.5)*5, vy:-Math.random()*2, 
+        life:30, color:'#888', size:3, type:'rect'
+    });
+}
+// small flashy spark particles for ascended boss effects
+function createSpark(x, y, color='#ffd27a', cnt=6, spread=6) {
+    for (let i=0;i<cnt;i++) particles.push({
+        x: x + (Math.random()-0.5)*spread,
+        y: y + (Math.random()-0.5)*spread,
+        vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4,
+        life: 18 + Math.random()*12, color: color, size: 2 + Math.random()*3, type: 'rect'
+    });
+}
+function createSlash(x, y, right) {
+    // main slash arc
+    particles.push({x: right?x+20:x-20, y:y, life:10, type:'slash', dir:right?1:-1, layer:0});
+    // secondary glow arc
+    particles.push({x: right?x+20:x-20, y:y, life:8, type:'slash', dir:right?1:-1, layer:1});
+    // cutting sparks
+    for (let i=0; i<5; i++) {
+        particles.push({
+            x: right?x+25:x-25, y: y + 20 + i*8,
+            vx: (right?1:-1) * (2 + Math.random()*3), vy: (Math.random()-0.5)*4,
+            life: 12, color: '#fff', size: 2, type: 'spark'
+        });
+    }
+}
+
+// 시작
+requestAnimationFrame(loop);
+window.addEventListener('keydown', e => { if(keys.hasOwnProperty(e.key) || e.key==='Shift') keys[e.key] = true; });
+window.addEventListener('keyup', e => { if(keys.hasOwnProperty(e.key) || e.key==='Shift') keys[e.key] = false; });
+
+</script>
+</body>
+</html>
