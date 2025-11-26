@@ -159,11 +159,14 @@ const uiPortrait = document.getElementById('portrait');
 const uiStage = document.getElementById('stage-num');
 
 // === 설정 및 상수 ===
+// TIME_BASE: internal normalization constant used so dt==1 equals one 60Hz frame.
+// This makes physics/timers frame-rate independent across devices: dt = deltaSeconds * TIME_BASE
+const TIME_BASE = 60;
 const GRAVITY = 0.5;
 const FRICTION = 0.85;
-const PLAYER_SPEED = 2; // increased ~2x as requested
+const PLAYER_SPEED = 1.5; // increased ~2x as requested
 const JUMP_POWER = 14;
-const DASH_SPEED = 13; // reduced to 1/4 of previous dash distance/speed
+const DASH_SPEED = 18; // reduced to 1/4 of previous dash distance/speed
 
 // Boss stats by id (default sizes/hp/colors)
 const BOSS_STATS = {
@@ -309,11 +312,11 @@ function loop(timestamp) {
     let deltaTime = (now - lastTime) / 1000; // 초 단위로 변환
     lastTime = now;
     
-    // 델타 타임 클램핑: 최소 8ms(120fps), 최대 100ms(10fps)
-    deltaTime = Math.max(0.008, Math.min(deltaTime, 0.1));
+    // 델타 타임 클램핑: 최대 100ms(10fps) - 최소값 제한을 제거하여 고주사율 모니터에서 빨라지는 문제 해결
+    deltaTime = Math.min(deltaTime, 0.1);
     
-    // 60fps 기준으로 정규화 (1.0 = 60fps에서의 1프레임)
-    let dt = deltaTime * 60;
+    // normalize relative to TIME_BASE (1 unit = one frame at TIME_BASE fps)
+    let dt = deltaTime * TIME_BASE;
 
     handleInput();
 
@@ -609,7 +612,8 @@ function updatePlay(dt) {
     if (player.state !== 'DASH') {
         if (keys.ArrowLeft) { player.vx -= PLAYER_SPEED * localDt; player.facingRight = false; }
         if (keys.ArrowRight) { player.vx += PLAYER_SPEED * localDt; player.facingRight = true; }
-        player.vx *= FRICTION;
+        // 프레임 레이트 독립적인 마찰력 적용
+        player.vx *= Math.pow(FRICTION, localDt);
     }
 
     if (keys.ArrowUp && player.grounded) {
@@ -787,8 +791,11 @@ function updatePlay(dt) {
     }
 
     updateParticles(localDt);
-    if (shake > 0) shake *= 0.9;
-    if (flash > 0) flash--;
+    if (shake > 0) {
+        shake *= Math.pow(0.9, dt);
+        if (shake < 0.5) shake = 0;
+    }
+    if (flash > 0) flash -= dt;
 }
 
 function updateEnemyAI(e, dt) {
@@ -839,7 +846,7 @@ function updateEnemyAI(e, dt) {
                 e.vx = e.dir * (DASH_SPEED * 0.7);
             }
         } else if (e.state === 'ATTACK') {
-            e.vx *= 0.9;
+            e.vx *= Math.pow(0.9, dt);
             e.timer -= 1 * dt;
             if (e.timer <= 0) { e.state = 'COOLDOWN'; e.timer = 60; }
         } else if (e.state === 'COOLDOWN') {
@@ -927,7 +934,8 @@ function updateBoss(dt) {
     if (player.state === 'DASH' && rectIntersect(player, boss)) {
         // 플레이어 튕겨나감
         player.vx = -player.vx * 1.5;
-        player.x += player.vx; 
+        // apply velocity scaled by dt so bounce distance is frame-rate independent
+        player.x += player.vx * dt; 
         player.state = 'IDLE'; // 대시 캔슬
         
         boss.hp -= 5; // 보스 체력 감소
@@ -1056,7 +1064,8 @@ function updateBoss(dt) {
         boss.timer += dt;
         // ascended prepares faster and more violently
         if (boss.timer > (isAscended ? 18 : 30)) {
-            boss.state = 'CHARGE'; boss.timer = 0; boss.vx = boss.dir * (isAscended ? 26 : 15);
+            // 보스 돌진 속도를 플레이어 이동속도보다 빠르게 설정 (PLAYER_SPEED * 8~15배)
+            boss.state = 'CHARGE'; boss.timer = 0; boss.vx = boss.dir * (isAscended ? PLAYER_SPEED * 20 : PLAYER_SPEED * 10);
             if (isAscended) {
                 // spectacle: spawn sparks and larger flash
                 for (let i=0;i<6;i++) createSpark(boss.x + boss.w/2, boss.y + boss.h/2, ['#ff9933','#ff4d4d','#ffd27a'][i%3], 6, 6 + i);
@@ -1742,8 +1751,19 @@ function createSlash(x, y, right) {
 // 시작
 lastTime = performance.now(); // 초기 시간 설정
 requestAnimationFrame(loop);
-window.addEventListener('keydown', e => { if(keys.hasOwnProperty(e.key) || e.key==='Shift') keys[e.key] = true; });
-window.addEventListener('keyup', e => { if(keys.hasOwnProperty(e.key) || e.key==='Shift') keys[e.key] = false; });
+window.addEventListener('keydown', e => {
+    if(keys.hasOwnProperty(e.key)) keys[e.key] = true;
+    // 대소문자/한글 입력 대응 (Z, R, Space)
+    if(e.code === 'KeyZ' || e.key.toLowerCase() === 'z') keys.z = true;
+    if(e.code === 'KeyR' || e.key.toLowerCase() === 'r') keys.r = true;
+    if(e.code === 'Space') keys[' '] = true;
+});
+window.addEventListener('keyup', e => {
+    if(keys.hasOwnProperty(e.key)) keys[e.key] = false;
+    if(e.code === 'KeyZ' || e.key.toLowerCase() === 'z') keys.z = false;
+    if(e.code === 'KeyR' || e.key.toLowerCase() === 'r') keys.r = false;
+    if(e.code === 'Space') keys[' '] = false;
+});
 
 </script>
 </body>
