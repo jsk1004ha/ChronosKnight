@@ -1065,7 +1065,7 @@ function updateBoss(dt) {
         // ascended prepares faster and more violently
         if (boss.timer > (isAscended ? 18 : 30)) {
             // 보스 돌진 속도를 플레이어 이동속도보다 빠르게 설정 (PLAYER_SPEED * 8~15배)
-            boss.state = 'CHARGE'; boss.timer = 0; boss.vx = boss.dir * (isAscended ? PLAYER_SPEED * 20 : PLAYER_SPEED * 10);
+            boss.state = 'CHARGE'; boss.timer = 0; boss.vx = boss.dir * (isAscended ? PLAYER_SPEED * 30 : PLAYER_SPEED * 20);
             if (isAscended) {
                 // spectacle: spawn sparks and larger flash
                 for (let i=0;i<6;i++) createSpark(boss.x + boss.w/2, boss.y + boss.h/2, ['#ff9933','#ff4d4d','#ffd27a'][i%3], 6, 6 + i);
