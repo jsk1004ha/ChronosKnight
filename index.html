@@ -161,17 +161,17 @@ const uiStage = document.getElementById('stage-num');
 // === 설정 및 상수 ===
 const GRAVITY = 0.5;
 const FRICTION = 0.85;
-const PLAYER_SPEED = 6.4; // increased ~2x as requested
+const PLAYER_SPEED = 2; // increased ~2x as requested
 const JUMP_POWER = 14;
-const DASH_SPEED = 15; // reduced to 1/4 of previous dash distance/speed
+const DASH_SPEED = 13; // reduced to 1/4 of previous dash distance/speed
 
 // Boss stats by id (default sizes/hp/colors)
 const BOSS_STATS = {
-    judge: { hp: 140, maxHp: 140, w: 120, h: 160, color: '#ff0044' },
+    judge: { hp: 140, maxHp: 140, w: 120, h: 130, color: '#ff0044' },
     archivist: { hp: 170, maxHp: 170, w: 100, h: 140, color: '#b28cff' },
-    paradox: { hp: 260, maxHp: 260, w: 160, h: 220, color: '#6b3b84' },
+    paradox: { hp: 260, maxHp: 260, w: 160, h: 170, color: '#6b3b84' },
     // stronger ascended variant of THE JUDGE for later encounter
-    judge_ascended: { hp: 320, maxHp: 320, w: 160, h: 200, color: '#b33a2a' }
+    judge_ascended: { hp: 320, maxHp: 320, w: 160, h: 150, color: '#b33a2a' }
 };
 
 // === 게임 상태 ===
@@ -180,7 +180,7 @@ let levelIdx = 0;
 let timeScale = 1.0;
 let shake = 0;
 let flash = 0;
-let lastTime = 0;
+let lastTime = performance.now();
 
 // 입력
 const keys = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, z: false, Shift: false, r: false, ' ': false };
@@ -305,9 +305,15 @@ let prevGameState = null;
 
 // === 게임 루프 ===
 function loop(timestamp) {
-    let dt = (timestamp - lastTime) / 16.66;
-    lastTime = timestamp;
-    if(dt > 3) dt = 1;
+    const now = performance.now();
+    let deltaTime = (now - lastTime) / 1000; // 초 단위로 변환
+    lastTime = now;
+    
+    // 델타 타임 클램핑: 최소 8ms(120fps), 최대 100ms(10fps)
+    deltaTime = Math.max(0.008, Math.min(deltaTime, 0.1));
+    
+    // 60fps 기준으로 정규화 (1.0 = 60fps에서의 1프레임)
+    let dt = deltaTime * 60;
 
     handleInput();
 
@@ -1734,6 +1740,7 @@ function createSlash(x, y, right) {
 }
 
 // 시작
+lastTime = performance.now(); // 초기 시간 설정
 requestAnimationFrame(loop);
 window.addEventListener('keydown', e => { if(keys.hasOwnProperty(e.key) || e.key==='Shift') keys[e.key] = true; });
 window.addEventListener('keyup', e => { if(keys.hasOwnProperty(e.key) || e.key==='Shift') keys[e.key] = false; });
