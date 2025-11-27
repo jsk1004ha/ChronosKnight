@@ -1105,16 +1105,72 @@ function updateBoss(dt) {
     else if (boss.state === 'CHARGE') {
         boss.timer += dt;
         // extra trail while charging
-        if (isAscended) {
-            createSpark(boss.x + (boss.dir>0?boss.w:0), boss.y + boss.h/2, '#ffbb44', 1, 3);
-            // when charge finishes, slam into ground creating projectiles
-            if (boss.timer > 28) {
-                boss.state = 'IDLE'; boss.vx = 0; boss.timer = 0;
-                shake = 20; flash = 4;
-                for (let s=-1; s<=1; s+=0.5) projectiles.push({x: boss.x + boss.w/2, y: 500-20, vx: 6*s, vy: -3 - Math.random()*3, color: '#ff6b3b'});
-            }
+            if (isAscended) {
+                createSpark(boss.x + (boss.dir>0?boss.w:0), boss.y + boss.h/2, '#ffbb44', 1, 3);
+                // when charge finishes, slam into ground creating projectiles
+                if (boss.timer > 28) {
+                    boss.state = 'IDLE'; boss.vx = 0; boss.timer = 0;
+                    shake = 20; flash = 4;
+                    for (let s=-1; s<=1; s+=0.5) projectiles.push({x: boss.x + boss.w/2, y: 500-20, vx: 6*s, vy: -3 - Math.random()*3, color: '#ff6b3b'});
+                }
+                // prevent boss from sliding off-screen mid-charge and add collision effect
+                // check screen edges first
+                if (boss.x < 0) {
+                    boss.x = 0;
+                    boss.vx = 0;
+                    boss.state = 'IDLE';
+                    // collision impact
+                    shake = Math.max(shake, 18);
+                    flash = Math.max(flash, 4);
+                    createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff7a3b', 8, 24);
+                } else if (boss.x + boss.w > canvas.width) {
+                    boss.x = canvas.width - boss.w;
+                    boss.vx = 0;
+                    boss.state = 'IDLE';
+                    // collision impact
+                    shake = Math.max(shake, 18);
+                    flash = Math.max(flash, 4);
+                    createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff7a3b', 8, 24);
+                }
+                // also check simple side collisions with platforms (vertical impact)
+                platforms.forEach(p => {
+                    // only consider platform vertical faces where boss overlaps vertically
+                    if (boss.y + boss.h > p.y && boss.y < p.y + p.h) {
+                        // hitting left face
+                        if (boss.vx > 0 && boss.x + boss.w > p.x && boss.x < p.x) {
+                            boss.x = p.x - boss.w;
+                            boss.vx = 0; boss.state = 'IDLE';
+                            shake = Math.max(shake, 18);
+                            flash = Math.max(flash, 4);
+                            createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff7a3b', 8, 20);
+                        }
+                        // hitting right face
+                        else if (boss.vx < 0 && boss.x < p.x + p.w && boss.x + boss.w > p.x + p.w) {
+                            boss.x = p.x + p.w;
+                            boss.vx = 0; boss.state = 'IDLE';
+                            shake = Math.max(shake, 18);
+                            flash = Math.max(flash, 4);
+                            createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff7a3b', 8, 20);
+                        }
+                    }
+                });
         } else {
+            // non-ascended charge — still protect bounds and add a hit effect
             if (boss.timer > 30) { boss.state = 'IDLE'; boss.vx = 0; boss.timer = 0; }
+            if (boss.x < 0) {
+                boss.x = 0; boss.vx = 0; boss.state = 'IDLE'; shake = Math.max(shake, 12); flash = Math.max(flash, 3); createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff6b3b', 6, 18);
+            } else if (boss.x + boss.w > canvas.width) {
+                boss.x = canvas.width - boss.w; boss.vx = 0; boss.state = 'IDLE'; shake = Math.max(shake, 12); flash = Math.max(flash, 3); createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff6b3b', 6, 18);
+            }
+            platforms.forEach(p => {
+                if (boss.y + boss.h > p.y && boss.y < p.y + p.h) {
+                    if (boss.vx > 0 && boss.x + boss.w > p.x && boss.x < p.x) {
+                        boss.x = p.x - boss.w; boss.vx = 0; boss.state = 'IDLE'; shake = Math.max(shake, 12); flash = Math.max(flash, 3); createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff6b3b', 6, 16);
+                    } else if (boss.vx < 0 && boss.x < p.x + p.w && boss.x + boss.w > p.x + p.w) {
+                        boss.x = p.x + p.w; boss.vx = 0; boss.state = 'IDLE'; shake = Math.max(shake, 12); flash = Math.max(flash, 3); createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff6b3b', 6, 16);
+                    }
+                }
+            });
         }
     }
     // 패턴 2: 점프 찍기
