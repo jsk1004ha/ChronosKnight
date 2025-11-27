@@ -387,7 +387,9 @@ function loadLevel(idx) {
         platforms.push({x: 520, y: 300, w: 120, h: 20});
         platforms.push({x: 700, y: 360, w: 120, h: 20});
         spawnEnemy(250, 360, 'melee');
+        spawnEnemy(300, 340, 'shield');
         spawnEnemy(420, 300, 'melee');
+        spawnEnemy(450, 300, 'melee');
         spawnEnemy(650, 360, 'melee');
         spawnEnemy(820, 440, 'melee');
         goal = {x: 920, y: 440, w: 40, h: 60};
@@ -397,8 +399,11 @@ function loadLevel(idx) {
         platforms.push({x: 380, y: 320, w: 160, h: 20});
         platforms.push({x: 620, y: 240, w: 160, h: 20});
         platforms.push({x: 860, y: 360, w: 120, h: 20});
+        spawnEnemy(300, 340, 'shield');
         spawnEnemy(220, 360, 'melee');
         spawnEnemy(420, 320, 'mage');
+        spawnEnemy(620, 320, 'mage');
+        spawnEnemy(420, 400, 'mage');
         spawnEnemy(660, 240, 'mage');
         spawnEnemy(900, 360, 'melee');
         goal = {x: 980, y: 440, w: 40, h: 60};
@@ -407,7 +412,14 @@ function loadLevel(idx) {
         platforms.push({x: 470, y: 300, w: 140, h: 20});
         platforms.push({x: 700, y: 360, w: 160, h: 20});
         spawnEnemy(300, 340, 'shield');
+        spawnEnemy(300, 380, 'shield');
         spawnEnemy(520, 260, 'mage');
+        spawnEnemy(420, 320, 'mage');
+        spawnEnemy(620, 320, 'mage');
+        spawnEnemy(420, 400, 'mage');
+        spawnEnemy(420, 400, 'mage');
+        spawnEnemy(760, 320, 'melee');
+        spawnEnemy(760, 320, 'melee');
         spawnEnemy(760, 320, 'melee');
         goal = {x: 960, y: 440, w: 40, h: 60};
     } else if (idx === 6) {
@@ -416,7 +428,13 @@ function loadLevel(idx) {
         platforms.push({x: 640, y: 300, w: 200, h: 20});
         platforms.push({x: 880, y: 360, w: 120, h: 20});
         spawnEnemy(160, 360, 'shield');
+        spawnEnemy(250, 360, 'shield');
+        spawnEnemy(300, 360, 'shield');
+        spawnEnemy(200, 360, 'shield');
         spawnEnemy(400, 310, 'mage');
+        spawnEnemy(520, 260, 'mage');
+        spawnEnemy(420, 320, 'mage');
+        spawnEnemy(620, 320, 'mage');
         spawnEnemy(700, 260, 'shield');
         goal = {x: 980, y: 440, w: 40, h: 60};
     } else if (idx === 7) {
@@ -440,8 +458,19 @@ function loadLevel(idx) {
         platforms.push({x: 420, y: 340, w: 160, h: 20});
         platforms.push({x: 680, y: 260, w: 160, h: 20});
         spawnEnemy(220, 360, 'melee');
+        spawnEnemy(330, 460, 'melee');
+        spawnEnemy(220, 560, 'melee');
+        spawnEnemy(220, 660, 'melee');
+        spawnEnemy(220, 760, 'melee');
         spawnEnemy(460, 300, 'mage');
         spawnEnemy(740, 220, 'mage');
+        spawnEnemy(250, 360, 'shield');
+        spawnEnemy(300, 360, 'shield');
+        spawnEnemy(200, 360, 'shield');
+        spawnEnemy(400, 310, 'mage');
+        spawnEnemy(520, 260, 'mage');
+        spawnEnemy(420, 320, 'mage');
+        
         goal = {x: 980, y: 440, w: 40, h: 60};
     } else if (idx === 9) {
         // paradox boss
@@ -1065,7 +1094,7 @@ function updateBoss(dt) {
         // ascended prepares faster and more violently
         if (boss.timer > (isAscended ? 18 : 30)) {
             // 보스 돌진 속도를 플레이어 이동속도보다 빠르게 설정 (PLAYER_SPEED * 8~15배)
-            boss.state = 'CHARGE'; boss.timer = 0; boss.vx = boss.dir * (isAscended ? PLAYER_SPEED * 30 : PLAYER_SPEED * 20);
+            boss.state = 'CHARGE'; boss.timer = 0; boss.vx = boss.dir * (isAscended ? PLAYER_SPEED * 30 : PLAYER_SPEED * 12);
             if (isAscended) {
                 // spectacle: spawn sparks and larger flash
                 for (let i=0;i<6;i++) createSpark(boss.x + boss.w/2, boss.y + boss.h/2, ['#ff9933','#ff4d4d','#ffd27a'][i%3], 6, 6 + i);
