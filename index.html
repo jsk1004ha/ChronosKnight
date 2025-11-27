@@ -959,6 +959,35 @@ function updateBoss(dt) {
         boss.vy = 0;
     }
 
+    // Prevent boss from escaping horizontally during any movement (incl. jumps).
+    // If boss tries to move out of screen bounds we clamp and trigger a stronger collision
+    // effect (bigger shake/flash) so jumps don't let boss leave the play area.
+    if (boss.x < 0) {
+        // only trigger impact if boss was moving into the wall
+        if (boss.vx < -0.1 || boss.state === 'JUMP' || boss.state === 'CHARGE') {
+            boss.x = 0;
+            boss.vx = 0;
+            // stronger collision impact for wall hits
+            shake = Math.max(shake, boss.id === 'judge_ascended' ? 48 : 28);
+            flash = Math.max(flash, 6);
+            createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff7733', 10, 28);
+            boss.state = 'IDLE';
+        } else {
+            boss.x = 0; boss.vx = 0;
+        }
+    } else if (boss.x + boss.w > canvas.width) {
+        if (boss.vx > 0.1 || boss.state === 'JUMP' || boss.state === 'CHARGE') {
+            boss.x = canvas.width - boss.w;
+            boss.vx = 0;
+            shake = Math.max(shake, boss.id === 'judge_ascended' ? 48 : 28);
+            flash = Math.max(flash, 6);
+            createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff7733', 10, 28);
+            boss.state = 'IDLE';
+        } else {
+            boss.x = canvas.width - boss.w; boss.vx = 0;
+        }
+    }
+
     // 플레이어와 충돌 (대시 공격 시 데미지)
     if (player.state === 'DASH' && rectIntersect(player, boss)) {
         // 플레이어 튕겨나감
@@ -1119,10 +1148,10 @@ function updateBoss(dt) {
                     boss.x = 0;
                     boss.vx = 0;
                     boss.state = 'IDLE';
-                    // collision impact
-                    shake = Math.max(shake, 18);
-                    flash = Math.max(flash, 4);
-                    createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff7a3b', 8, 24);
+                    // collision impact — much stronger
+                    shake = Math.max(shake, 48);
+                    flash = Math.max(flash, 6);
+                    createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff7a3b', 12, 34);
                 } else if (boss.x + boss.w > canvas.width) {
                     boss.x = canvas.width - boss.w;
                     boss.vx = 0;
@@ -1140,9 +1169,10 @@ function updateBoss(dt) {
                         if (boss.vx > 0 && boss.x + boss.w > p.x && boss.x < p.x) {
                             boss.x = p.x - boss.w;
                             boss.vx = 0; boss.state = 'IDLE';
-                            shake = Math.max(shake, 18);
-                            flash = Math.max(flash, 4);
-                            createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff7a3b', 8, 20);
+                            // impact: much stronger for ascended
+                            shake = Math.max(shake, 48);
+                            flash = Math.max(flash, 6);
+                            createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff7a3b', 12, 30);
                         }
                         // hitting right face
                         else if (boss.vx < 0 && boss.x < p.x + p.w && boss.x + boss.w > p.x + p.w) {
@@ -1158,16 +1188,16 @@ function updateBoss(dt) {
             // non-ascended charge — still protect bounds and add a hit effect
             if (boss.timer > 30) { boss.state = 'IDLE'; boss.vx = 0; boss.timer = 0; }
             if (boss.x < 0) {
-                boss.x = 0; boss.vx = 0; boss.state = 'IDLE'; shake = Math.max(shake, 12); flash = Math.max(flash, 3); createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff6b3b', 6, 18);
+                boss.x = 0; boss.vx = 0; boss.state = 'IDLE'; shake = Math.max(shake, 28); flash = Math.max(flash, 6); createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff6b3b', 8, 22);
             } else if (boss.x + boss.w > canvas.width) {
-                boss.x = canvas.width - boss.w; boss.vx = 0; boss.state = 'IDLE'; shake = Math.max(shake, 12); flash = Math.max(flash, 3); createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff6b3b', 6, 18);
+                boss.x = canvas.width - boss.w; boss.vx = 0; boss.state = 'IDLE'; shake = Math.max(shake, 28); flash = Math.max(flash, 6); createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff6b3b', 8, 22);
             }
             platforms.forEach(p => {
                 if (boss.y + boss.h > p.y && boss.y < p.y + p.h) {
-                    if (boss.vx > 0 && boss.x + boss.w > p.x && boss.x < p.x) {
-                        boss.x = p.x - boss.w; boss.vx = 0; boss.state = 'IDLE'; shake = Math.max(shake, 12); flash = Math.max(flash, 3); createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff6b3b', 6, 16);
+                        if (boss.vx > 0 && boss.x + boss.w > p.x && boss.x < p.x) {
+                        boss.x = p.x - boss.w; boss.vx = 0; boss.state = 'IDLE'; shake = Math.max(shake, 28); flash = Math.max(flash, 6); createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff6b3b', 8, 22);
                     } else if (boss.vx < 0 && boss.x < p.x + p.w && boss.x + boss.w > p.x + p.w) {
-                        boss.x = p.x + p.w; boss.vx = 0; boss.state = 'IDLE'; shake = Math.max(shake, 12); flash = Math.max(flash, 3); createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff6b3b', 6, 16);
+                        boss.x = p.x + p.w; boss.vx = 0; boss.state = 'IDLE'; shake = Math.max(shake, 28); flash = Math.max(flash, 6); createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff6b3b', 8, 22);
                     }
                 }
             });
