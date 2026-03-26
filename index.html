@@ -175,7 +175,7 @@ const BOSS_STATS = {
     archivist: { hp: 170, maxHp: 170, w: 100, h: 140, color: '#b28cff' },
     paradox: { hp: 260, maxHp: 260, w: 160, h: 170, color: '#6b3b84' },
     // stronger ascended variant of THE JUDGE for later encounter
-    judge_ascended: { hp: 220, maxHp: 220, w: 160, h: 150, color: '#b33a2a' }
+    judge_ascended: { hp: 320, maxHp: 320, w: 160, h: 150, color: '#b33a2a' }
 };
 
 const BOSS_DISPLAY_NAMES = {
@@ -1348,7 +1348,7 @@ function updateBoss(dt) {
             shake = isAscended ? 22 : 20;
             // 충격파 생성
             if (isAscended) {
-                for (let i=-1; i<=1; i+=1) projectiles.push({x: boss.x + boss.w/2, y: 500-20, vx: 6*i, vy: -1, color: '#ff8a33'});
+                for (let i=-1; i<=1; i+=0.5) projectiles.push({x: boss.x + boss.w/2, y: 500-20, vx: 6*i, vy: -1.4, color: '#ff8a33'});
                 for (let i=0;i<8;i++) createSpark(boss.x + boss.w/2 + Math.random()*80-40, 500-20, ['#ff6b3b','#ffd27a'][i%2], 4, 6);
             } else {
                 projectiles.push({x: boss.x, y: 500-20, vx: -5, vy: 0, color: 'red'});
@@ -1365,13 +1365,13 @@ function updateBoss(dt) {
                 // giant barrage — colorful and dramatic
                 const colors = ['#ff6b3b','#ffb86b','#ffd27a','#ff4d4d'];
                 for (let r=0; r<2; r++) {
-                    for(let i=0;i<6;i++) {
-                        const ang = (i/6) * Math.PI*2 + (r*0.24);
+                    for(let i=0;i<7;i++) {
+                        const ang = (i/7) * Math.PI*2 + (r*0.22);
                         projectiles.push({
                             x: boss.x + boss.w/2 + Math.cos(ang)*10,
                             y: boss.y + 20 + Math.sin(ang)*10,
-                            vx: Math.cos(ang) * (4.2 + Math.random()*2.2),
-                            vy: Math.sin(ang) * (4.2 + Math.random()*2.2) - 1.5,
+                            vx: Math.cos(ang) * (4.8 + Math.random()*2.4),
+                            vy: Math.sin(ang) * (4.8 + Math.random()*2.4) - 1.5,
                             color: colors[(i+r) % colors.length]
                         });
                     }
@@ -1484,9 +1484,9 @@ function updateBoss(dt) {
         if (boss.timer > ascendedArcPrep) {
             boss.state = 'ARC'; boss.timer = 0;
             // spawn a spectacular rotating arc volley
-            for (let i=0;i<10;i++) {
-                const ang = (i/10) * Math.PI*2;
-                projectiles.push({ x: boss.x + boss.w/2, y: boss.y + boss.h/2, vx: Math.cos(ang)*4.5, vy: Math.sin(ang)*4.5, color: '#ff9966' });
+            for (let i=0;i<12;i++) {
+                const ang = (i/12) * Math.PI*2;
+                projectiles.push({ x: boss.x + boss.w/2, y: boss.y + boss.h/2, vx: Math.cos(ang)*5.1, vy: Math.sin(ang)*5.1, color: '#ff9966' });
             }
             // some visual particles
             for (let i=0;i<20;i++) createSpark(boss.x + boss.w/2 + (Math.random()-0.5)*120, boss.y + boss.h/2 + (Math.random()-0.5)*40, '#ffd27a', 3, 8);
