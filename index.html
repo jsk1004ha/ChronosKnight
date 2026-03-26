@@ -150,6 +150,7 @@ const ctx = canvas.getContext('2d');
 // UI Elements
 const uiEnergy = document.getElementById('energy-bar');
 const uiBossHud = document.getElementById('boss-hud');
+const uiBossName = document.getElementById('boss-name');
 const uiBossHp = document.getElementById('boss-hp-fill');
 const uiBossHpText = document.getElementById('boss-hp-text');
 const uiDialogue = document.getElementById('dialogue');
@@ -174,7 +175,14 @@ const BOSS_STATS = {
     archivist: { hp: 170, maxHp: 170, w: 100, h: 140, color: '#b28cff' },
     paradox: { hp: 260, maxHp: 260, w: 160, h: 170, color: '#6b3b84' },
     // stronger ascended variant of THE JUDGE for later encounter
-    judge_ascended: { hp: 320, maxHp: 320, w: 160, h: 150, color: '#b33a2a' }
+    judge_ascended: { hp: 220, maxHp: 220, w: 160, h: 150, color: '#b33a2a' }
+};
+
+const BOSS_DISPLAY_NAMES = {
+    judge: 'THE JUDGE',
+    judge_ascended: 'ASCENDED JUDGE',
+    archivist: 'ARCHIVIST',
+    paradox: 'THE PARADOX'
 };
 
 // === 게임 상태 ===
@@ -184,6 +192,7 @@ let timeScale = 1.0;
 let shake = 0;
 let flash = 0;
 let lastTime = performance.now();
+let useExternalClock = false;
 
 // 입력
 const keys = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, z: false, Shift: false, r: false, ' ': false };
@@ -274,16 +283,21 @@ const STORY = {
         { "id": 7, "key":"ruined_library", "mapId":6, "title":"폐허가 된 도서관", "isBossStage": false, "bossId": null,
             "introDialogue":[{"speaker":"기록의 잔향","text":"심판자는 실패한 미래들을 수없이 보았다. 그래서 반복을 선택했다."},{"speaker":"기사","text":"실패를 두려워해 멈춰버리는 게, 진짜 파멸이다."}], "midDialogue":[], "clearCondition":"reach_goal_after_all_enemies_dead","clearDialogue":[{"speaker":"기사","text":"확실해졌다. 이 반복은, 두려움에서 시작된 감옥이다."}]
         },
-        { "id": 8, "key":"chronos_control", "mapId":7, "title":"크로노스 제어실", "isBossStage": true, "bossId":"archivist",
+        { "id": 8, "key":"fractured_throne", "mapId":7, "title":"균열의 왕좌", "isBossStage": true, "bossId":"judge_ascended",
+            "introDialogue":[{"speaker":"심판자","text":"내가 본 모든 실패를 부정하겠다면, 이 몸으로 직접 끝을 보여주마."},{"speaker":"기사","text":"미래를 핑계 삼아 사람을 가두는 심판은 여기서 끝난다."}],
+            "midDialogue":[{"trigger":"boss_hp_65","speaker":"심판자","text":"왜 쓰러지지 않지… 이건 기록에 없는 움직임이다!"},{"trigger":"boss_hp_35","speaker":"기사","text":"기록에 없어서가 아니다. 네가 두려워서 못 본 미래일 뿐이다."}],
+            "clearCondition":"boss_defeated","clearDialogue":[{"speaker":"심판자","text":"반복의 권좌가… 무너진다…"},{"speaker":"기사","text":"이제 남은 건, 이 감옥을 굴리던 핵심뿐이다."}]
+        },
+        { "id": 9, "key":"chronos_control", "mapId":8, "title":"크로노스 제어실", "isBossStage": true, "bossId":"archivist",
             "introDialogue":[{"speaker":"기록관","text":"어서 오게, 반항적인 변이. 네 모든 실패를 기록한 자다."},{"speaker":"기사","text":"날 그저 데이터로 봤겠지. 하지만 지금 이 선택은, 기록되지 않은 길이다."},{"speaker":"기록관","text":"통계를 믿지 않는군. 좋다, 예외가 될 수 있는지 확인해 보자."}],
             "midDialogue":[{"trigger":"boss_hp_70","speaker":"기록관","text":"수치상 넌 여기서 93퍼센트 확률로 쓰러진다."},{"trigger":"boss_hp_40","speaker":"기사","text":"확률? 내 의지는 숫자로 나눌 수 없다!" }],
             "clearCondition":"boss_defeated","clearDialogue":[{"speaker":"기록관","text":"기록을… 덮어쓰는 자라니… 흥미로운 변수로군…"},{"speaker":"기사","text":"이제 더 이상, 과거의 실패에 묶이지 않겠다."}]
         },
-        { "id": 9, "key":"engine_core", "mapId":8, "title":"엔진 중심부", "isBossStage": false, "bossId": null,
+        { "id": 10, "key":"engine_core", "mapId":9, "title":"엔진 중심부", "isBossStage": false, "bossId": null,
             "introDialogue":[{"speaker":"기사","text":"중력이 뒤틀리고 있다… 시간도, 공간도 한계까지 찢겨지는군."},{"speaker":"시스템","text":"발판이 나타났다 사라집니다. 시간 감속을 이용해 안전한 타이밍을 노리십시오."}],
             "midDialogue":[], "clearCondition":"reach_goal_after_all_enemies_dead","clearDialogue":[{"speaker":"기사","text":"곧, 이 모든 반복의 심장부에 닿는다."}]
         },
-        { "id": 10, "key":"engine_heart", "mapId":9, "title":"크로노스 엔진 심장부", "isBossStage": true, "bossId":"paradox",
+        { "id": 11, "key":"engine_heart", "mapId":10, "title":"크로노스 엔진 심장부", "isBossStage": true, "bossId":"paradox",
             "introDialogue":[{"speaker":"패러독스","text":"어리석은 인간. 시간이 자유로워지면, 세상은 혼돈 속으로 추락한다."},{"speaker":"기사","text":"혼돈이 두려워 역사를 가둔 건 너다. 미래는 우리 손으로 선택한다."},{"speaker":"패러독스","text":"선택의 부담을 감당할 수 있다고 믿는가? 그 오만을 시험해보지."}],
             "midDialogue":[{"trigger":"boss_hp_70","speaker":"패러독스","text":"넌 이미 수천 번 이곳에서 죽었다. 이것도 또 하나의 실패일 뿐."},{"trigger":"boss_hp_40","speaker":"기사","text":"그래, 수천 번 쓰러졌지. 하지만 수천 한 번째는 다를 수 있다!" }],
             "clearCondition":"boss_defeated","clearDialogue":[{"speaker":"패러독스","text":"시간이… 구속에서 풀려난다… 혼돈 속에서, 진짜 선택이 이루어지겠지…"},{"speaker":"기사","text":"그래. 그게 살아간다는 거다."}]
@@ -291,6 +305,7 @@ const STORY = {
     ],
     "bosses": [
         { "id":"judge", "name":"THE JUDGE", "title":"끝없는 순환의 심판자", "role":"시간 반복 체제를 수호하는 왕국의 인공 수호자" },
+        { "id":"judge_ascended", "name":"ASCENDED JUDGE", "title":"기록에 집착한 잔존 심판", "role":"붕괴하는 반복에 매달린 심판자의 강화체" },
         { "id":"archivist", "name":"ARCHIVIST", "title":"시간 기록의 관리자", "role":"모든 반복의 결과를 저장하고, 통계로 미래를 예측하는 존재" },
         { "id":"paradox", "name":"THE PARADOX", "title":"시간 그 자체의 의지", "role":"크로노스 엔진 심장부에서 깨어난, 시간의 집합 의식" }
     ]
@@ -308,6 +323,10 @@ let prevGameState = null;
 
 // === 게임 루프 ===
 function loop(timestamp) {
+    if (useExternalClock) {
+        requestAnimationFrame(loop);
+        return;
+    }
     const now = performance.now();
     let deltaTime = (now - lastTime) / 1000; // 초 단위로 변환
     lastTime = now;
@@ -318,13 +337,7 @@ function loop(timestamp) {
     // normalize relative to TIME_BASE (1 unit = one frame at TIME_BASE fps)
     let dt = deltaTime * TIME_BASE;
 
-    handleInput();
-
-    if (gameState === 'PLAY') updatePlay(dt);
-    else if (gameState === 'CUTSCENE') updateCutscene();
-    else if (gameState === 'DEAD') updateDead();
-
-    draw();
+    runFrame(dt);
     requestAnimationFrame(loop);
 }
 
@@ -334,12 +347,24 @@ function handleInput() {
     keyPress[' '] = keys[' '] && !keyPress.space_held; keyPress.space_held = keys[' '];
 }
 
+function runFrame(dt) {
+    handleInput();
+
+    if (gameState === 'PLAY') updatePlay(dt);
+    else if (gameState === 'CUTSCENE') updateCutscene();
+    else if (gameState === 'DEAD') updateDead();
+
+    draw();
+}
+
 // === 레벨 로드 ===
 function loadLevel(idx) {
     if (idx >= LEVELS.length) {
         gameState = 'END';
         return;
     }
+
+    levelIdx = idx;
     
     // 초기화
     player.x = 50; player.y = 400; player.vx = 0; player.vy = 0;
@@ -352,6 +377,7 @@ function loadLevel(idx) {
     particles = [];
     boss = null;
     uiBossHud.style.display = 'none';
+    uiBossName.innerText = 'THE JUDGE';
 
     // remember current stage/story data if available
     currentStage = STORY.stages[idx] || null;
@@ -374,11 +400,7 @@ function loadLevel(idx) {
         spawnEnemy(850, 350, 'mage');
         goal = {x: 950, y: 440, w: 40, h: 60};
     } else if (idx === 2) { // 보스전 (심판자)
-        uiBossHud.style.display = 'flex';
-        const cfgJ = BOSS_STATS.judge || {hp:100,maxHp:100,w:100,h:140,color:'#ff0044'};
-        boss = { id: 'judge', x:700, y:300, w:cfgJ.w, h:cfgJ.h, vx:0, vy:0, hp:cfgJ.hp, maxHp:cfgJ.maxHp, phase:1, state:'IDLE', timer:0, dir:-1, color:cfgJ.color };
-        uiBossHp.style.width = '100%';
-        uiBossHpText.innerText = boss.hp + ' / ' + boss.maxHp;
+        setBossEncounter('judge', 700, 300);
         goal = {x: 9999, y: 0, w: 0, h: 0}; // 목표 없음 (보스 처치 시 승리)
     } else if (idx === 3) {
         // 좁은 길 + 다수의 근접 적
@@ -438,47 +460,28 @@ function loadLevel(idx) {
         spawnEnemy(700, 260, 'shield');
         goal = {x: 980, y: 440, w: 40, h: 60};
     } else if (idx === 7) {
-        // second boss encounter — ascended Judge variant (stronger, flashy)
-        uiBossHud.style.display = 'flex';
-        const cfgJ2 = BOSS_STATS.judge_ascended || {hp:240,maxHp:240,w:160,h:200,color:'#b33a2a'};
-        boss = { id: 'judge_ascended', x:700, y:260, w:cfgJ2.w, h:cfgJ2.h, vx:0, vy:0, hp:cfgJ2.hp, maxHp:cfgJ2.maxHp, phase:1, state:'IDLE', timer:0, dir:-1, color:cfgJ2.color };
-        uiBossHp.style.width = '100%';
-        uiBossHpText.innerText = boss.hp + ' / ' + boss.maxHp;
+        // second boss encounter — ascended Judge variant, now rebalanced
+        setBossEncounter('judge_ascended', 700, 260);
         goal = {x: 9999, y: 0, w: 0, h: 0};
     } else if (idx === 8) {
         // archivist boss
-        uiBossHud.style.display = 'flex';
-        const cfgA = BOSS_STATS.archivist || {hp:160,maxHp:160,w:100,h:140,color:'#b28cff'};
-        boss = { id: 'archivist', x:700, y:300, w:cfgA.w, h:cfgA.h, vx:0, vy:0, hp:cfgA.hp, maxHp:cfgA.maxHp, phase:1, state:'IDLE', timer:0, dir:-1, color:cfgA.color };
-        uiBossHp.style.width = '100%';
-        uiBossHpText.innerText = boss.hp + ' / ' + boss.maxHp;
+        setBossEncounter('archivist', 700, 300);
         goal = {x: 9999, y: 0, w: 0, h: 0};
-    } else if (idx === 8) {
+    } else if (idx === 9) {
         platforms.push({x: 180, y: 400, w: 160, h: 20});
         platforms.push({x: 420, y: 340, w: 160, h: 20});
         platforms.push({x: 680, y: 260, w: 160, h: 20});
-        spawnEnemy(220, 360, 'melee');
-        spawnEnemy(330, 460, 'melee');
-        spawnEnemy(220, 560, 'melee');
-        spawnEnemy(220, 660, 'melee');
-        spawnEnemy(220, 760, 'melee');
-        spawnEnemy(460, 300, 'mage');
-        spawnEnemy(740, 220, 'mage');
-        spawnEnemy(250, 360, 'shield');
-        spawnEnemy(300, 360, 'shield');
-        spawnEnemy(200, 360, 'shield');
-        spawnEnemy(400, 310, 'mage');
-        spawnEnemy(520, 260, 'mage');
-        spawnEnemy(420, 320, 'mage');
-        
+        spawnEnemy(220, 360, 'shield');
+        spawnEnemy(300, 360, 'melee');
+        spawnEnemy(460, 300, 'chrono_sentry');
+        spawnEnemy(520, 300, 'mage');
+        spawnEnemy(740, 220, 'chrono_sentry');
+        spawnEnemy(820, 220, 'mage');
+        spawnEnemy(920, 440, 'melee');
         goal = {x: 980, y: 440, w: 40, h: 60};
-    } else if (idx === 9) {
+    } else if (idx === 10) {
         // paradox boss
-        uiBossHud.style.display = 'flex';
-        const cfgP = BOSS_STATS.paradox || {hp:220,maxHp:220,w:160,h:220,color:'#6b3b84'};
-        boss = { id: 'paradox', x:700, y:200, w:cfgP.w, h:cfgP.h, vx:0, vy:0, hp:cfgP.hp, maxHp:cfgP.maxHp, phase:1, state:'IDLE', timer:0, dir:-1, color:cfgP.color };
-        uiBossHp.style.width = '100%';
-        uiBossHpText.innerText = boss.hp + ' / ' + boss.maxHp;
+        setBossEncounter('paradox', 700, 200);
         goal = {x: 9999, y: 0, w: 0, h: 0};
     }
 
@@ -495,7 +498,7 @@ function loadLevel(idx) {
 }
 
 function spawnEnemy(x, y, type) {
-    enemies.push({
+    const base = {
         x: x, y: y, w: 40, h: 60,
         vx: 0, vy: 0,
         startX: x,
@@ -503,14 +506,62 @@ function spawnEnemy(x, y, type) {
         state: 'PATROL',
         timer: 0,
         dir: -1,
-        // AI flags
         alerted: false,
-        // ranges (melee/shield short, mage long)
-        attackRange: (type === 'melee' || type === 'shield') ? 80 : 360,
-        detectionRange: (type === 'melee' || type === 'shield') ? 260 : 420,
         alive: true,
         grounded: false
+    };
+
+    if (type === 'chrono_sentry') {
+        enemies.push({
+            ...base,
+            w: 46,
+            h: 54,
+            attackRange: 320,
+            detectionRange: 520,
+            moveRange: 90,
+            hoverOffset: 0,
+            burstShots: 3,
+            hoverPhase: Math.random() * Math.PI * 2
+        });
+        return;
+    }
+
+    enemies.push({
+        ...base,
+        attackRange: (type === 'melee' || type === 'shield') ? 80 : 360,
+        detectionRange: (type === 'melee' || type === 'shield') ? 260 : 420
     });
+}
+
+function setBossEncounter(id, x, y) {
+    const cfg = BOSS_STATS[id];
+    boss = {
+        id,
+        x,
+        y,
+        w: cfg.w,
+        h: cfg.h,
+        vx: 0,
+        vy: 0,
+        hp: cfg.hp,
+        maxHp: cfg.maxHp,
+        phase: 1,
+        state: 'IDLE',
+        timer: 0,
+        dir: -1,
+        color: cfg.color
+    };
+    uiBossHud.style.display = 'flex';
+    uiBossName.innerText = BOSS_DISPLAY_NAMES[id] || id.toUpperCase();
+    uiBossHp.style.width = '100%';
+    uiBossHpText.innerText = boss.hp + ' / ' + boss.maxHp;
+}
+
+function getBossDashDamage(id) {
+    if (id === 'judge_ascended') return 12;
+    if (id === 'archivist') return 7;
+    if (id === 'paradox') return 6;
+    return 5;
 }
 
 // === 업데이트 로직 ===
@@ -945,6 +996,80 @@ function updateEnemyAI(e, dt) {
             }
         }
     }
+    else if (e.type === 'chrono_sentry') {
+        const preferredMin = 180;
+        const preferredMax = e.attackRange;
+
+        if (!e.alerted && distAbs < e.detectionRange) {
+            e.alerted = true;
+            e.state = 'REPOSITION';
+        }
+
+        if (!e.alerted) {
+            if (Math.abs(e.x - e.startX) > e.moveRange) e.dir *= -1;
+            e.vx = e.dir * 0.9;
+        } else if (e.state === 'PATROL') {
+            e.state = 'REPOSITION';
+        } else if (e.state === 'REPOSITION') {
+            if (distAbs < preferredMin) {
+                e.dir = dist > 0 ? -1 : 1;
+                e.vx = e.dir * (PLAYER_SPEED * 0.9);
+            } else if (distAbs > preferredMax) {
+                e.dir = dist > 0 ? 1 : -1;
+                e.vx = e.dir * (PLAYER_SPEED * 0.85);
+            } else {
+                e.vx = 0;
+                e.state = 'LOCK_ON';
+                e.timer = 40;
+            }
+        } else if (e.state === 'LOCK_ON') {
+            e.vx = 0;
+            e.timer -= 1 * dt;
+            if (Math.random() > 0.6) {
+                particles.push({
+                    x: e.x + e.w/2 + (Math.random()-0.5) * 18,
+                    y: e.y + 14 + (Math.random()-0.5) * 8,
+                    vx: (Math.random()-0.5) * 1.5,
+                    vy: -Math.random() * 1.5,
+                    life: 14,
+                    color: '#7fe7ff',
+                    size: 2,
+                    type: 'glow'
+                });
+            }
+            if (e.timer <= 0) {
+                e.state = 'BURST';
+                e.volleyRemaining = e.burstShots;
+                e.shotTimer = 0;
+            }
+        } else if (e.state === 'BURST') {
+            e.vx = 0;
+            e.shotTimer -= 1 * dt;
+            if (e.shotTimer <= 0 && e.volleyRemaining > 0) {
+                const spreadIndex = e.burstShots - e.volleyRemaining;
+                const baseAngle = Math.atan2(player.y - (e.y + 18), player.x - e.x);
+                const spread = [-0.16, 0, 0.16][spreadIndex] || 0;
+                projectiles.push({
+                    x: e.x + e.w/2,
+                    y: e.y + 18,
+                    vx: Math.cos(baseAngle + spread) * 5.2,
+                    vy: Math.sin(baseAngle + spread) * 5.2,
+                    color: '#6de0ff'
+                });
+                createSpark(e.x + e.w/2, e.y + 18, '#9af1ff', 3, 10);
+                e.volleyRemaining -= 1;
+                e.shotTimer = 8;
+            }
+            if (e.volleyRemaining <= 0 && e.shotTimer <= 0) {
+                e.state = 'COOLDOWN';
+                e.timer = 85;
+            }
+        } else if (e.state === 'COOLDOWN') {
+            e.vx = 0;
+            e.timer -= 1 * dt;
+            if (e.timer <= 0) e.state = 'REPOSITION';
+        }
+    }
 }
 
 function updateBoss(dt) {
@@ -968,7 +1093,7 @@ function updateBoss(dt) {
             boss.x = 0;
             boss.vx = 0;
             // stronger collision impact for wall hits
-            shake = Math.max(shake, boss.id === 'judge_ascended' ? 48 : 28);
+            shake = Math.max(shake, boss.id === 'judge_ascended' ? 30 : 28);
             flash = Math.max(flash, 6);
             createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff7733', 10, 28);
             boss.state = 'IDLE';
@@ -979,7 +1104,7 @@ function updateBoss(dt) {
         if (boss.vx > 0.1 || boss.state === 'JUMP' || boss.state === 'CHARGE') {
             boss.x = canvas.width - boss.w;
             boss.vx = 0;
-            shake = Math.max(shake, boss.id === 'judge_ascended' ? 48 : 28);
+            shake = Math.max(shake, boss.id === 'judge_ascended' ? 30 : 28);
             flash = Math.max(flash, 6);
             createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff7733', 10, 28);
             boss.state = 'IDLE';
@@ -996,7 +1121,7 @@ function updateBoss(dt) {
         player.x += player.vx * dt; 
         player.state = 'IDLE'; // 대시 캔슬
         
-        boss.hp -= 5; // 보스 체력 감소
+        boss.hp -= getBossDashDamage(boss.id);
         shake = 15;
         flash = 4;
         createBlood(boss.x + boss.w/2, boss.y + boss.h/2, '#ff0044');
@@ -1080,6 +1205,14 @@ function updateBoss(dt) {
     const isAscended = boss.id === 'judge_ascended';
     const isArchivist = boss.id === 'archivist';
     const isParadox = boss.id === 'paradox';
+    const ascendedChargePrep = 28;
+    const ascendedChargeSpeed = PLAYER_SPEED * 19;
+    const ascendedChargeDuration = 20;
+    const ascendedJumpPrep = 22;
+    const ascendedJumpVy = -21;
+    const ascendedJumpVx = 4.5;
+    const ascendedMagicPrep = 40;
+    const ascendedArcPrep = 34;
     let dist = player.x - boss.x;
     
     if (boss.state === 'IDLE') {
@@ -1087,7 +1220,7 @@ function updateBoss(dt) {
         boss.dir = dist > 0 ? 1 : -1;
         boss.timer += dt;
         let idleTime = 60;
-        if (isAscended) idleTime = 45;
+        if (isAscended) idleTime = 68;
         else if (isArchivist) idleTime = 50;
         else if (isParadox) idleTime = 40;
         
@@ -1095,9 +1228,9 @@ function updateBoss(dt) {
             // 패턴 랜덤 선택
             let rand = Math.random();
             if (isAscended) {
-                if (rand < 0.35) boss.state = 'CHARGE_PREP';
-                else if (rand < 0.6) boss.state = 'JUMP_PREP';
-                else if (rand < 0.85) boss.state = 'MAGIC_PREP';
+                if (rand < 0.28) boss.state = 'CHARGE_PREP';
+                else if (rand < 0.56) boss.state = 'JUMP_PREP';
+                else if (rand < 0.8) boss.state = 'MAGIC_PREP';
                 else boss.state = 'ARC_PREP';
             } else if (isArchivist) {
                 if (rand < 0.3) boss.state = 'CHARGE_PREP';
@@ -1121,13 +1254,13 @@ function updateBoss(dt) {
     else if (boss.state === 'CHARGE_PREP') {
         boss.timer += dt;
         // ascended prepares faster and more violently
-        if (boss.timer > (isAscended ? 18 : 30)) {
+        if (boss.timer > (isAscended ? ascendedChargePrep : 30)) {
             // 보스 돌진 속도를 플레이어 이동속도보다 빠르게 설정 (PLAYER_SPEED * 8~15배)
-            boss.state = 'CHARGE'; boss.timer = 0; boss.vx = boss.dir * (isAscended ? PLAYER_SPEED * 30 : PLAYER_SPEED * 12);
+            boss.state = 'CHARGE'; boss.timer = 0; boss.vx = boss.dir * (isAscended ? ascendedChargeSpeed : PLAYER_SPEED * 12);
             if (isAscended) {
                 // spectacle: spawn sparks and larger flash
                 for (let i=0;i<6;i++) createSpark(boss.x + boss.w/2, boss.y + boss.h/2, ['#ff9933','#ff4d4d','#ffd27a'][i%3], 6, 6 + i);
-                flash = 6; shake = 20;
+                flash = 4; shake = 14;
             }
         }
     }
@@ -1137,10 +1270,10 @@ function updateBoss(dt) {
             if (isAscended) {
                 createSpark(boss.x + (boss.dir>0?boss.w:0), boss.y + boss.h/2, '#ffbb44', 1, 3);
                 // when charge finishes, slam into ground creating projectiles
-                if (boss.timer > 28) {
+                if (boss.timer > ascendedChargeDuration) {
                     boss.state = 'IDLE'; boss.vx = 0; boss.timer = 0;
-                    shake = 20; flash = 4;
-                    for (let s=-1; s<=1; s+=0.5) projectiles.push({x: boss.x + boss.w/2, y: 500-20, vx: 6*s, vy: -3 - Math.random()*3, color: '#ff6b3b'});
+                    shake = 14; flash = 3;
+                    for (let s=-1; s<=1; s+=1) projectiles.push({x: boss.x + boss.w/2, y: 500-20, vx: 5*s, vy: -2 - Math.random()*2, color: '#ff6b3b'});
                 }
                 // prevent boss from sliding off-screen mid-charge and add collision effect
                 // check screen edges first
@@ -1149,15 +1282,15 @@ function updateBoss(dt) {
                     boss.vx = 0;
                     boss.state = 'IDLE';
                     // collision impact — much stronger
-                    shake = Math.max(shake, 48);
-                    flash = Math.max(flash, 6);
-                    createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff7a3b', 12, 34);
+                    shake = Math.max(shake, 24);
+                    flash = Math.max(flash, 4);
+                    createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff7a3b', 10, 26);
                 } else if (boss.x + boss.w > canvas.width) {
                     boss.x = canvas.width - boss.w;
                     boss.vx = 0;
                     boss.state = 'IDLE';
                     // collision impact
-                    shake = Math.max(shake, 18);
+                    shake = Math.max(shake, 24);
                     flash = Math.max(flash, 4);
                     createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff7a3b', 8, 24);
                 }
@@ -1170,15 +1303,15 @@ function updateBoss(dt) {
                             boss.x = p.x - boss.w;
                             boss.vx = 0; boss.state = 'IDLE';
                             // impact: much stronger for ascended
-                            shake = Math.max(shake, 48);
-                            flash = Math.max(flash, 6);
-                            createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff7a3b', 12, 30);
+                            shake = Math.max(shake, 24);
+                            flash = Math.max(flash, 4);
+                            createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff7a3b', 10, 24);
                         }
                         // hitting right face
                         else if (boss.vx < 0 && boss.x < p.x + p.w && boss.x + boss.w > p.x + p.w) {
                             boss.x = p.x + p.w;
                             boss.vx = 0; boss.state = 'IDLE';
-                            shake = Math.max(shake, 18);
+                            shake = Math.max(shake, 24);
                             flash = Math.max(flash, 4);
                             createSpark(boss.x + boss.w/2, boss.y + boss.h/2, '#ff7a3b', 8, 20);
                         }
@@ -1206,16 +1339,16 @@ function updateBoss(dt) {
     // 패턴 2: 점프 찍기
     else if (boss.state === 'JUMP_PREP') {
         boss.timer += dt;
-        if (boss.timer > (isAscended ? 14 : 20)) { boss.state = 'JUMP'; boss.vy = (isAscended? -26 : -20); boss.vx = boss.dir * (isAscended?8:5); }
+        if (boss.timer > (isAscended ? ascendedJumpPrep : 20)) { boss.state = 'JUMP'; boss.vy = (isAscended ? ascendedJumpVy : -20); boss.vx = boss.dir * (isAscended ? ascendedJumpVx : 5); }
     }
     else if (boss.state === 'JUMP') {
         if (boss.y >= 500 - boss.h) { // 착지
             boss.state = 'IDLE'; boss.vx = 0; boss.timer = 0;
-            shake = isAscended? 32 : 20; // stronger quake for ascended
+            shake = isAscended ? 22 : 20;
             // 충격파 생성
             if (isAscended) {
-                for (let i=-1; i<=1; i+=0.5) projectiles.push({x: boss.x + boss.w/2, y: 500-20, vx: 8*i, vy: -1, color: '#ff8a33'});
-                for (let i=0;i<12;i++) createSpark(boss.x + boss.w/2 + Math.random()*80-40, 500-20, ['#ff6b3b','#ffd27a'][i%2], 4, 6);
+                for (let i=-1; i<=1; i+=1) projectiles.push({x: boss.x + boss.w/2, y: 500-20, vx: 6*i, vy: -1, color: '#ff8a33'});
+                for (let i=0;i<8;i++) createSpark(boss.x + boss.w/2 + Math.random()*80-40, 500-20, ['#ff6b3b','#ffd27a'][i%2], 4, 6);
             } else {
                 projectiles.push({x: boss.x, y: 500-20, vx: -5, vy: 0, color: 'red'});
                 projectiles.push({x: boss.x+boss.w, y: 500-20, vx: 5, vy: 0, color: 'red'});
@@ -1225,25 +1358,25 @@ function updateBoss(dt) {
     // 패턴 3: 마법 난사
     else if (boss.state === 'MAGIC_PREP') {
         boss.timer += dt;
-        if (boss.timer > (isAscended? 28 : 40)) {
+        if (boss.timer > (isAscended ? ascendedMagicPrep : 40)) {
             boss.state = 'IDLE'; boss.timer = 0;
             if (isAscended) {
                 // giant barrage — colorful and dramatic
                 const colors = ['#ff6b3b','#ffb86b','#ffd27a','#ff4d4d'];
-                for (let r=0; r<3; r++) {
-                    for(let i=0;i<8;i++) {
-                        const ang = (i/8) * Math.PI*2 + (r*0.2);
+                for (let r=0; r<2; r++) {
+                    for(let i=0;i<6;i++) {
+                        const ang = (i/6) * Math.PI*2 + (r*0.24);
                         projectiles.push({
                             x: boss.x + boss.w/2 + Math.cos(ang)*10,
                             y: boss.y + 20 + Math.sin(ang)*10,
-                            vx: Math.cos(ang) * (5 + Math.random()*6),
-                            vy: Math.sin(ang) * (5 + Math.random()*6) - 2,
+                            vx: Math.cos(ang) * (4.2 + Math.random()*2.2),
+                            vy: Math.sin(ang) * (4.2 + Math.random()*2.2) - 1.5,
                             color: colors[(i+r) % colors.length]
                         });
                     }
                 }
                 // extra flash
-                flash = 8; shake = 14;
+                flash = 5; shake = 10;
             } else {
                 for(let i=0; i<5; i++) {
                     projectiles.push({ x: boss.x + boss.w/2, y: boss.y + 20, vx: (Math.random()-0.5)*10, vy: -5 - Math.random()*5, color: 'red' });
@@ -1347,20 +1480,20 @@ function updateBoss(dt) {
     // special arc sweep for ascended judge
     else if (boss.state === 'ARC_PREP') {
         boss.timer += dt;
-        if (boss.timer > 24) {
+        if (boss.timer > ascendedArcPrep) {
             boss.state = 'ARC'; boss.timer = 0;
             // spawn a spectacular rotating arc volley
-            for (let i=0;i<16;i++) {
-                const ang = (i/16) * Math.PI*2;
-                projectiles.push({ x: boss.x + boss.w/2, y: boss.y + boss.h/2, vx: Math.cos(ang)*6, vy: Math.sin(ang)*6, color: '#ff9966' });
+            for (let i=0;i<10;i++) {
+                const ang = (i/10) * Math.PI*2;
+                projectiles.push({ x: boss.x + boss.w/2, y: boss.y + boss.h/2, vx: Math.cos(ang)*4.5, vy: Math.sin(ang)*4.5, color: '#ff9966' });
             }
             // some visual particles
-            for (let i=0;i<30;i++) createSpark(boss.x + boss.w/2 + (Math.random()-0.5)*120, boss.y + boss.h/2 + (Math.random()-0.5)*40, '#ffd27a', 3, 8);
-            shake = 18; flash = 6;
+            for (let i=0;i<20;i++) createSpark(boss.x + boss.w/2 + (Math.random()-0.5)*120, boss.y + boss.h/2 + (Math.random()-0.5)*40, '#ffd27a', 3, 8);
+            shake = 12; flash = 4;
         }
     } else if (boss.state === 'ARC') {
         boss.timer += dt;
-        if (boss.timer > 20) { boss.state = 'IDLE'; boss.vx = 0; boss.timer = 0; }
+        if (boss.timer > 16) { boss.state = 'IDLE'; boss.vx = 0; boss.timer = 0; }
     }
 }
 
@@ -1625,6 +1758,7 @@ function drawEnemy(e) {
     if (e.state === 'ATTACK') color = '#ff0000';
     if (e.type === 'mage') color = '#800080';
     if (e.type === 'shield') color = '#446688';
+    if (e.type === 'chrono_sentry') color = e.state === 'LOCK_ON' ? '#7fe7ff' : '#35566c';
 
     // 그림자
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
@@ -1714,6 +1848,46 @@ function drawEnemy(e) {
             ctx.beginPath(); ctx.arc(e.x + e.w/2 + (e.dir*15), e.y + 10, pulse + 4, 0, Math.PI*2); ctx.fill();
             ctx.restore();
         }
+    } else if (e.type === 'chrono_sentry') {
+        const hover = Math.sin(Date.now() / 180 + e.hoverPhase) * 4;
+        ctx.save();
+        ctx.translate(0, hover);
+
+        ctx.fillStyle = 'rgba(80,200,255,0.18)';
+        ctx.beginPath();
+        ctx.ellipse(e.x + e.w/2, e.y + e.h + 4, 18, 6, 0, 0, Math.PI*2);
+        ctx.fill();
+
+        ctx.fillStyle = color;
+        ctx.fillRect(e.x + 6, e.y + 8, e.w - 12, e.h - 18);
+        ctx.strokeStyle = '#9cd9ff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(e.x + 6, e.y + 8, e.w - 12, e.h - 18);
+
+        ctx.fillStyle = '#bff8ff';
+        ctx.shadowBlur = 16;
+        ctx.shadowColor = '#7fe7ff';
+        ctx.beginPath();
+        ctx.arc(e.x + e.w/2, e.y + 22, e.state === 'LOCK_ON' ? 8 : 6, 0, Math.PI*2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        ctx.strokeStyle = '#6f99b2';
+        ctx.beginPath();
+        ctx.moveTo(e.x + 12, e.y + e.h - 14);
+        ctx.lineTo(e.x + 4, e.y + e.h + 2);
+        ctx.moveTo(e.x + e.w - 12, e.y + e.h - 14);
+        ctx.lineTo(e.x + e.w - 4, e.y + e.h + 2);
+        ctx.stroke();
+
+        if (e.state === 'LOCK_ON') {
+            ctx.strokeStyle = 'rgba(127,231,255,0.5)';
+            ctx.beginPath();
+            ctx.moveTo(e.x + e.w/2, e.y + 22);
+            ctx.lineTo(player.x + player.w/2, player.y + player.h/2);
+            ctx.stroke();
+        }
+        ctx.restore();
     }
     
     // [ ! ] 표시
@@ -1862,6 +2036,58 @@ function createSlash(x, y, right) {
         });
     }
 }
+
+function renderGameToText() {
+    const payload = {
+        coordinateSystem: 'origin top-left, +x right, +y down',
+        mode: gameState,
+        stageIndex: levelIdx + 1,
+        stageTitle: currentStage ? currentStage.title : 'menu',
+        player: {
+            x: Math.round(player.x),
+            y: Math.round(player.y),
+            vx: Number(player.vx.toFixed(2)),
+            vy: Number(player.vy.toFixed(2)),
+            state: player.state,
+            energy: Math.round(player.energy)
+        },
+        boss: boss ? {
+            id: boss.id,
+            hp: Math.max(0, Math.round(boss.hp)),
+            maxHp: boss.maxHp,
+            state: boss.state,
+            x: Math.round(boss.x),
+            y: Math.round(boss.y)
+        } : null,
+        enemies: enemies.filter(e => e.alive).map(e => ({
+            type: e.type,
+            state: e.state,
+            x: Math.round(e.x),
+            y: Math.round(e.y)
+        })),
+        projectiles: projectiles.slice(0, 12).map(p => ({
+            x: Math.round(p.x),
+            y: Math.round(p.y),
+            color: p.color
+        })),
+        goal: goal && goal.w > 0 ? { x: goal.x, y: goal.y, w: goal.w, h: goal.h } : null,
+        dialogue: uiDialogue.style.display !== 'none' ? {
+            speaker: uiSpeaker.innerText || '',
+            text: uiText.innerText || ''
+        } : null
+    };
+    return JSON.stringify(payload);
+}
+
+window.render_game_to_text = renderGameToText;
+window.advanceTime = (ms) => {
+    useExternalClock = true;
+    const frameMs = 1000 / TIME_BASE;
+    const steps = Math.max(1, Math.round(ms / frameMs));
+    const dt = (ms / 1000) * TIME_BASE / steps;
+    for (let i = 0; i < steps; i++) runFrame(dt);
+    return renderGameToText();
+};
 
 // 시작
 lastTime = performance.now(); // 초기 시간 설정
