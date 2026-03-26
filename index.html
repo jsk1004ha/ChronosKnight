@@ -577,6 +577,7 @@ function updateCutscene() {
             } else if (currentDialogueType === 'mid') {
                 // resume whatever we were doing before
                 gameState = prevGameState || 'PLAY';
+                uiDialogue.style.display = 'none';
             } else if (currentDialogueType === 'clear') {
                 // advance to next stage after clear dialogue
                 uiDialogue.style.display = 'none';
